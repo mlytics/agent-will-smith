@@ -1,0 +1,118 @@
+{
+  "info": {
+    "name": "AIGC MVP API",
+    "description": "API collection for testing AIGC MVP API Server",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Generate Questions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputs\": {\n    \"url\": \"https://example.com/article\",\n    \"context\": \"This article discusses the impact of artificial intelligence on modern business operations and how companies are adapting to new technologies.\",\n    \"lang\": \"zh-tw\"\n  },\n  \"user\": \"{{user}}\",\n  \"type\": \"answer_page\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/generateQuestions",
+          "host": ["{{base_url}}"],
+          "path": ["generateQuestions"]
+        }
+      }
+    },
+    {
+      "name": "Get Metadata",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputs\": {\n    \"url\": \"https://example.com/article\",\n    \"query\": \"artificial intelligence business applications\",\n    \"tag_prompt\": \"Generate 5 concise topic tags\"\n  },\n  \"user\": \"{{user}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/getMetadata",
+          "host": ["{{base_url}}"],
+          "path": ["getMetadata"]
+        }
+      }
+    },
+    {
+      "name": "Get Answer (Non-Streaming)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputs\": {\n    \"query\": \"What are the key benefits of AI in business?\",\n    \"url\": \"https://example.com/article\",\n    \"lang\": \"zh-tw\"\n  },\n  \"user\": \"{{user}}\",\n  \"stream\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/getAnswer",
+          "host": ["{{base_url}}"],
+          "path": ["getAnswer"]
+        }
+      }
+    },
+    {
+      "name": "Get Answer (Streaming)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputs\": {\n    \"query\": \"What are the key benefits of AI in business?\",\n    \"url\": \"https://example.com/article\",\n    \"lang\": \"zh-tw\"\n  },\n  \"user\": \"{{user}}\",\n  \"stream\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/getAnswer",
+          "host": ["{{base_url}}"],
+          "path": ["getAnswer"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8888",
+      "type": "string"
+    },
+    {
+      "key": "user",
+      "value": "test_user",
+      "type": "string"
+    }
+  ]
+}
+
