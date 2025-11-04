@@ -143,8 +143,56 @@ class SearchService:
             
             # Extract images
             images = []
-            for img in soup.find_all("img", src=True)[:5]:
-                img_url = img["src"]
+            seen_images = set()  # Track seen images to avoid duplicates
+            
+            # First, try Open Graph image (usually the best quality)
+            og_image = soup.find("meta", property="og:image")
+            if og_image and og_image.get("content"):
+                img_url = og_image["content"]
+                if img_url not in seen_images:
+                    seen_images.add(img_url)
+                    # Convert relative URLs to absolute
+                    if not img_url.startswith("http"):
+                        if img_url.startswith("//"):
+                            img_url = "https:" + img_url
+                        elif img_url.startswith("/"):
+                            img_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}{img_url}"
+                        else:
+                            img_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}/{img_url}"
+                    images.append({
+                        "url": img_url,
+                        "width": 0,
+                        "height": 0,
+                        "type": "og:image"
+                    })
+            
+            # Try Twitter card image
+            twitter_image = soup.find("meta", attrs={"name": "twitter:image"})
+            if twitter_image and twitter_image.get("content"):
+                img_url = twitter_image["content"]
+                if img_url not in seen_images:
+                    seen_images.add(img_url)
+                    if not img_url.startswith("http"):
+                        if img_url.startswith("//"):
+                            img_url = "https:" + img_url
+                        elif img_url.startswith("/"):
+                            img_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}{img_url}"
+                    images.append({
+                        "url": img_url,
+                        "width": 0,
+                        "height": 0,
+                        "type": "twitter:image"
+                    })
+            
+            # Extract images from <img> tags
+            for img in soup.find_all("img", src=True):
+                if len(images) >= 5:  # Limit to 5 images total
+                    break
+                    
+                img_url = img.get("src") or img.get("data-src") or img.get("data-lazy-src")
+                if not img_url:
+                    continue
+                
                 # Convert relative URLs to absolute
                 if img_url.startswith("//"):
                     img_url = "https:" + img_url
@@ -153,11 +201,18 @@ class SearchService:
                 elif not img_url.startswith("http"):
                     continue
                 
-                images.append({
-                    "url": img_url,
-                    "width": img.get("width", 0) if img.get("width") else 0,
-                    "height": img.get("height", 0) if img.get("height") else 0
-                })
+                # Skip data URLs and very small images
+                if img_url.startswith("data:") or "icon" in img_url.lower() or "logo" in img_url.lower():
+                    continue
+                
+                if img_url not in seen_images:
+                    seen_images.add(img_url)
+                    images.append({
+                        "url": img_url,
+                        "width": int(img.get("width", 0)) if img.get("width") and str(img.get("width")).isdigit() else 0,
+                        "height": int(img.get("height", 0)) if img.get("height") and str(img.get("height")).isdigit() else 0,
+                        "type": "img_tag"
+                    })
             
             return {
                 "title": title,
