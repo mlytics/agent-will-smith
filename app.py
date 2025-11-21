@@ -167,6 +167,15 @@ class EEATAssessmentRequest(BaseModel):
     inputs: EEATAssessmentInput
     user: Optional[str] = "uuid_user"
 
+class SummarizeRequest(BaseModel):
+    title: str
+    content: str
+    author: Optional[str] = None
+    publish_time: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    category: Optional[str] = None
+    permalink: Optional[str] = None
+
 # Helper functions
 
 def generate_uuid(key: str) -> str:
@@ -477,10 +486,54 @@ async def get_answer(request: GetAnswerRequest):
         
         # If content_id provided, fetch content; otherwise use URL
         content_text = ""
-        if inputs.content_id:
-            content_text = await content_service.get_content(inputs.content_id)
-        elif inputs.url:
-            content_text = await content_service.fetch_content(inputs.url)
+        # Normalize empty strings to None for validation
+        content_id = inputs.content_id.strip() if inputs.content_id and inputs.content_id.strip() else None
+        url = inputs.url.strip() if inputs.url and inputs.url.strip() else None
+        
+        if content_id:
+            content_text = await content_service.get_content(content_id)
+            # Validate: if content_id provided but content is empty, fail like Vext
+            if not content_text:
+                # Return Vext format: 200 OK with status "failed" in data
+                created_at = int(start_time)
+                finished_at = int(time.time())
+                elapsed_time = time.time() - start_time
+                task_id = str(uuid.uuid4())
+                
+                response = {
+                    "event": "workflow_finished",
+                    "task_id": task_id,
+                    "data": {
+                        "status": "failed",
+                        "outputs": {},
+                        "elapsed_time": elapsed_time,
+                        "created_at": created_at,
+                        "finished_at": finished_at
+                    }
+                }
+                return JSONResponse(content=response)
+        elif url:
+            content_text = await content_service.fetch_content(url)
+        
+        # If both content_id and url are empty/not provided, fail like Vext
+        if not content_id and not url:
+            created_at = int(start_time)
+            finished_at = int(time.time())
+            elapsed_time = time.time() - start_time
+            task_id = str(uuid.uuid4())
+            
+            response = {
+                "event": "workflow_finished",
+                "task_id": task_id,
+                "data": {
+                    "status": "failed",
+                    "outputs": {},
+                    "elapsed_time": elapsed_time,
+                    "created_at": created_at,
+                    "finished_at": finished_at
+                }
+            }
+            return JSONResponse(content=response)
 
         # Streaming response
         if request.stream:
@@ -789,6 +842,90 @@ async def eeat_assessment(request: EEATAssessmentRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error performing EEAT assessment: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.post("/summarize", dependencies=[Depends(verify_bearer_token)])
+async def summarize(request: SummarizeRequest):
+    """
+    Generate comprehensive summaries for Intent Engine content_article table
+    """
+    start_time = time.time()
+    
+    logger.info(f"Received summarize request for article: {request.title[:50]}")
+    logger.debug(f"Request data: {request.model_dump()}")
+    
+    try:
+        # Validate input
+        if not request.title or not request.content:
+            raise HTTPException(
+                status_code=400,
+                detail="Title and content are required"
+            )
+        
+        # Generate cache key
+        cache_key = get_cache_key(
+            "summarize",
+            {
+                "title": request.title,
+                "content_hash": hashlib.sha256(request.content.encode()).hexdigest()[:16],
+                "author": request.author or "",
+                "category": request.category or ""
+            },
+            ""
+        )
+        
+        # Check cache
+        cached_result = await cache_service.get(cache_key)
+        if cached_result:
+            logger.info(f"Cache hit for summarization: {cache_key[:20]}...")
+            return JSONResponse(content=cached_result)
+        
+        # Generate summaries using Gemini
+        summaries = await gemini_service.generate_summaries(
+            title=request.title,
+            content=request.content,
+            author=request.author,
+            keywords=request.keywords,
+            category=request.category,
+            lang="zh-tw"  # Can be made configurable
+        )
+        
+        # Build response
+        response = {
+            "full_summary": summaries.get("full_summary", ""),
+            "bullet_summary": summaries.get("bullet_summary", []),
+            "semantic_paragraphs": summaries.get("semantic_paragraphs", {}),
+            "entities": summaries.get("entities", {}),
+            "labels": summaries.get("labels", {})
+        }
+        
+        # Cache result (1 hour)
+        await cache_service.set(cache_key, response, ttl=3600)
+        
+        return JSONResponse(content=response)
+        
+    except ValueError as e:
+        error_msg = str(e)
+        if "location is not supported" in error_msg.lower() or "region" in error_msg.lower():
+            logger.error(f"Gemini API location restriction: {error_msg}")
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini API is not available in this region."
+            )
+        elif "cannot connect" in error_msg.lower() or "connection" in error_msg.lower():
+            logger.error(f"Gemini API connection error: {error_msg}")
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot connect to Gemini API."
+            )
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating summaries: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"

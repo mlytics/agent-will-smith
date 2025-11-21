@@ -6,7 +6,7 @@ Python FastAPI server that replaces the Vext API with Google Gemini backend. Mai
 
 ## Features
 
-- **Four Core Endpoints**: `POST /generateQuestions`, `POST /getMetadata`, `POST /getAnswer`, `POST /eeat`
+- **Five Core Endpoints**: `POST /generateQuestions`, `POST /getMetadata`, `POST /getAnswer`, `POST /eeat`, `POST /summarize`
 - **Gemini Integration**: Uses Google Gemini for LLM operations
 - **E-E-A-T Assessment**: Analyze content quality (Experience, Expertise, Authoritativeness, Trust) based on Google's Search Quality Rater Guidelines
 - **Multi-Language Support**: Generate questions and answers in multiple languages via optional `lang` parameter
@@ -179,6 +179,22 @@ curl -X POST http://localhost:8888/eeat \
       }
     },
     "user": "test_user"
+  }'
+```
+
+#### Summarize Article (for Intent Engine)
+```bash
+curl -X POST http://localhost:8888/summarize \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer change_me" \
+  -d '{
+    "title": "天泓文創(08500)盤中飆升逾40% 創52周新高",
+    "content": "天泓文創(08500)今日盤中股價大幅上揚，最高見0.75元，升幅超過40%，創下52周新高。該股成交量明顯放大，主動買沽比率為55:45，顯示市場資金積極流入。技術指標方面，RSI相對強弱指標飆升至83.58，顯示股價已進入超買區間。分析師指出，此次股價異動可能與公司近期業務發展或市場傳聞有關，投資者需留意後續動向。",
+    "author": "鉅亨網記者",
+    "publish_time": "2025-11-20T10:30:00Z",
+    "keywords": ["港股", "異動股", "天泓文創", "股票", "金融"],
+    "category": "金融",
+    "permalink": "https://m.cnyes.com/news/id/5627491"
   }'
 ```
 
@@ -401,6 +417,27 @@ Generate answer with optional SSE streaming. Can use `content_id` from `/generat
 
 **Note:** If `content_id` is provided, it retrieves content saved during `/generateQuestions`. Otherwise, it fetches from `url`. Set `"stream": true` for SSE streaming.
 
+**Error Handling:**
+- If `content_id` is provided but not found or expired (content expires after 10 minutes from `/generateQuestions`), the API returns `"status": "failed"` with empty `outputs: {}`
+- If both `url` and `content_id` are empty, the API returns `"status": "failed"` with empty `outputs: {}`
+- This matches Vext API behavior for consistency
+- **Note:** `content_id` from `/generateQuestions` is valid for 10 minutes. After that, use the `url` parameter or regenerate questions to get a new `content_id`
+
+**Response (failed status):**
+```json
+{
+  "event": "workflow_finished",
+  "task_id": "fedb98f1-fb3e-4a0f-bde2-3aeaedf1b10c",
+  "data": {
+    "status": "failed",
+    "outputs": {},
+    "elapsed_time": 1.655961,
+    "created_at": 1763691378,
+    "finished_at": 1763691379
+  }
+}
+```
+
 **Language Parameter (`lang`):**
 - Optional parameter (defaults to `"zh-tw"` if not specified)
 - Controls the language of generated answers
@@ -514,6 +551,73 @@ Assess E-E-A-T (Experience, Expertise, Authoritativeness, Trust) quality of cont
 - Metadata is optional but helps improve assessment accuracy
 - Results are cached for 1 hour
 - Both `/eeat` and `/api/v1/content/eeat-assessment` endpoints are available
+
+### POST /summarize
+
+Generate comprehensive summaries for Intent Engine content_article table. This endpoint is designed for Databricks integration to populate summary fields in the Intent Engine.
+
+**Request:**
+```json
+{
+  "title": "Article title",
+  "content": "Full article content text...",
+  "author": "Optional: author name",
+  "publish_time": "Optional: ISO 8601 timestamp (e.g., 2025-11-20T10:30:00Z)",
+  "keywords": ["Optional", "array", "of", "keywords"],
+  "category": "Optional: category name",
+  "permalink": "Optional: article URL"
+}
+```
+
+**Response:**
+```json
+{
+  "full_summary": "Comprehensive 2-3 paragraph summary of the article covering main points, key insights, and conclusions.",
+  "bullet_summary": [
+    "Key point 1",
+    "Key point 2",
+    "Key point 3",
+    "Key point 4",
+    "Key point 5"
+  ],
+  "semantic_paragraphs": {
+    "paragraphs": [
+      {
+        "text": "Introduction paragraph text...",
+        "semantic_role": "introduction"
+      },
+      {
+        "text": "Main body paragraph text...",
+        "semantic_role": "body"
+      },
+      {
+        "text": "Conclusion paragraph text...",
+        "semantic_role": "conclusion"
+      }
+    ]
+  },
+  "entities": {
+    "persons": ["Person Name 1", "Person Name 2"],
+    "organizations": ["Organization 1", "Organization 2"],
+    "locations": ["Location 1", "Location 2"],
+    "products": ["Product 1"],
+    "events": ["Event 1"]
+  },
+  "labels": {
+    "topics": ["topic1", "topic2", "topic3"],
+    "sentiment": "positive",
+    "category": "金融",
+    "content_type": "news"
+  }
+}
+```
+
+**Notes:**
+- `title` and `content` are required fields
+- All other fields are optional but help improve summarization quality
+- Results are cached for 1 hour based on content hash
+- Designed for batch processing from Databricks Intent Engine pipeline
+- Returns structured JSON suitable for direct database updates
 
 ## Language Support
 

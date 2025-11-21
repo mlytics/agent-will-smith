@@ -574,6 +574,154 @@ Respond in {lang_prompt} for rationale and recommendations, but keep level value
             logger.error(f"Error assessing EEAT: {str(e)}", exc_info=True)
             raise
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    async def generate_summaries(
+        self,
+        title: str,
+        content: str,
+        author: Optional[str] = None,
+        keywords: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        lang: str = "zh-tw"
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive summaries for Intent Engine
+        
+        Args:
+            title: Article title
+            content: Article content
+            author: Author name (optional)
+            keywords: List of keywords (optional)
+            category: Category (optional)
+            lang: Language code
+            
+        Returns:
+            Dict with full_summary, bullet_summary, semantic_paragraphs, entities, labels
+        """
+        lang_prompt = get_language_name(lang or "zh-tw")
+        
+        # Build context
+        context = f"Title: {title}\n\n"
+        if author:
+            context += f"Author: {author}\n"
+        if category:
+            context += f"Category: {category}\n"
+        if keywords:
+            context += f"Keywords: {', '.join(keywords)}\n"
+        context += f"\nContent:\n{content[:15000]}\n"  # Limit content length
+        
+        prompt = f"""You are an expert content analyst. Analyze the following article and generate comprehensive summaries in {lang_prompt}.
+
+{context}
+
+Generate the following outputs in JSON format:
+
+1. **Full Summary**: A comprehensive 2-3 paragraph summary of the article covering main points, key insights, and conclusions.
+
+2. **Bullet Summary**: A list of 5-7 key bullet points highlighting the most important information.
+
+3. **Semantic Paragraphs**: Identify and extract the semantic structure of the article. Group related sentences into semantic units and describe their role (introduction, main argument, supporting evidence, conclusion, etc.). Return as JSON with structure:
+   {{
+     "paragraphs": [
+       {{"text": "...", "semantic_role": "introduction|body|conclusion|evidence|analysis"}},
+       ...
+     ]
+   }}
+
+4. **Entities**: Extract named entities from the article. Return as JSON:
+   {{
+     "persons": ["Person 1", "Person 2"],
+     "organizations": ["Org 1", "Org 2"],
+     "locations": ["Location 1", "Location 2"],
+     "products": ["Product 1"],
+     "events": ["Event 1"]
+   }}
+
+5. **Labels**: Generate content labels for categorization. Return as JSON:
+   {{
+     "topics": ["topic1", "topic2", "topic3"],
+     "sentiment": "positive|neutral|negative",
+     "category": "{category or 'general'}",
+     "content_type": "news|analysis|opinion|tutorial|review"
+   }}
+
+Return your response as a valid JSON object with this exact structure:
+{{
+  "full_summary": "...",
+  "bullet_summary": ["...", "..."],
+  "semantic_paragraphs": {{"paragraphs": [...]}},
+  "entities": {{"persons": [...], "organizations": [...], ...}},
+  "labels": {{"topics": [...], "sentiment": "...", ...}}
+}}
+
+IMPORTANT:
+- All text should be in {lang_prompt}
+- Keep summaries concise but informative
+- Extract all relevant entities
+- Be accurate with sentiment analysis
+- Return valid JSON only, no markdown formatting"""
+        
+        try:
+            # Run synchronous Gemini API call in thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.model.generate_content(
+                    prompt,
+                    safety_settings=self.safety_settings,
+                    generation_config={
+                        "max_output_tokens": 3000,
+                        "temperature": 0.7,
+                    }
+                )
+            )
+            
+            result_text = response.text.strip()
+            
+            # Parse JSON from response
+            import json
+            import re
+            
+            # Find JSON in response (handle markdown code blocks)
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_data = json.loads(json_match.group())
+            else:
+                # Fallback: try to parse the entire response
+                try:
+                    result_data = json.loads(result_text)
+                except:
+                    logger.error(f"Failed to parse summarization JSON: {result_text[:500]}")
+                    raise ValueError("Failed to parse summarization response")
+            
+            # Validate and return
+            return {
+                "full_summary": result_data.get("full_summary", ""),
+                "bullet_summary": result_data.get("bullet_summary", []),
+                "semantic_paragraphs": result_data.get("semantic_paragraphs", {}),
+                "entities": result_data.get("entities", {}),
+                "labels": result_data.get("labels", {})
+            }
+            
+        except google_exceptions.FailedPrecondition as e:
+            error_msg = str(e)
+            if "location is not supported" in error_msg.lower():
+                logger.warning("Gemini API not available in this region.")
+                raise ValueError("Gemini API is not available in your region.")
+            raise
+        except (google_exceptions.ServiceUnavailable, google_exceptions.RetryError) as e:
+            error_msg = str(e)
+            if "timeout" in error_msg.lower() or "connection timed out" in error_msg.lower():
+                logger.error(f"Connection timeout to Gemini API: {error_msg}")
+                raise ValueError("Cannot connect to Gemini API.")
+            raise
+        except Exception as e:
+            logger.error(f"Error generating summaries: {str(e)}", exc_info=True)
+            raise
+    
     def _normalize_eeat_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize and validate EEAT assessment response
