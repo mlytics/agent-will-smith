@@ -39,6 +39,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Cache TTL configuration
+# Maximum TTL: 50 years in seconds (50 * 365.25 * 24 * 60 * 60)
+MAX_TTL_SECONDS = 1_577_836_800  # 50 years
+
 # Security configuration
 API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN")
 
@@ -307,8 +311,8 @@ async def generate_questions(request: GenerateQuestionsRequest):
             }
         }
         
-        # Cache result (10 minutes)
-        await cache_service.set(cache_key, response, ttl=600)
+        # Cache result (50 years - maximum TTL)
+        await cache_service.set(cache_key, response, ttl=MAX_TTL_SECONDS)
         
         return JSONResponse(content=response)
         
@@ -428,8 +432,8 @@ async def get_metadata(request: GetMetadataRequest):
             }
         }
         
-        # Cache result (1 hour)
-        await cache_service.set(cache_key, response, ttl=3600)
+        # Cache result (50 years - maximum TTL)
+        await cache_service.set(cache_key, response, ttl=MAX_TTL_SECONDS)
         
         return JSONResponse(content=response)
         
@@ -537,6 +541,9 @@ async def get_answer(request: GetAnswerRequest):
 
         # Streaming response
         if request.stream:
+            # Generate task_id before streaming starts
+            task_id = str(uuid.uuid4())
+            
             async def stream_answer():
                 try:
                     # Send workflow event
@@ -558,25 +565,53 @@ async def get_answer(request: GetAnswerRequest):
                         chunk_data = json.dumps({"chunk": chunk})
                         yield f"event: token_chunk\ndata: {chunk_data}\n\n"
                     
-                    # Extract citations
-                    citations = await gemini_service.extract_citations(
-                        answer=full_answer,
-                        sources=[]  # Can be enhanced with actual sources
-                    )
+                    # Calculate timestamps
+                    created_at = int(start_time)
+                    finished_at = int(time.time())
+                    elapsed_time = time.time() - start_time
+                    
+                    # Format citations - use content_id if available, otherwise extract from answer
+                    citations = []
+                    citation_type = "none"
+                    
+                    if content_id:
+                        # If content_id is provided, use it as citation (matching Vext behavior)
+                        citations = [{
+                            "title": content_id,
+                            "url": content_id,
+                            "content_id": content_id,
+                            "author": None,
+                            "publish_time": None,
+                            "thumbnail_url": None
+                        }]
+                        citation_type = "cached"
+                    else:
+                        # Extract citations from answer if any URLs found
+                        extracted_citations = await gemini_service.extract_citations(
+                            answer=full_answer,
+                            sources=[]
+                        )
+                        if extracted_citations:
+                            citations = extracted_citations
+                            citation_type = "extracted"
                     
                     citations_data = json.dumps({"citations": citations})
                     yield f"event: citations\ndata: {citations_data}\n\n"
                     
-                    # Send final event
+                    # Send final event matching Vext format
                     final_data = json.dumps({
-                        "outputs": {
-                            "result": full_answer
-                        },
-                        "provider": "gemini-2.5-flash",
-                        "meta": {
-                            "tokens_used": len(full_answer.split()),  # Approximate
-                            "latency_ms": int((time.time() - start_time) * 1000),
-                            "cached": False
+                        "event": "workflow_finished",
+                        "task_id": task_id,
+                        "data": {
+                            "status": "succeeded",
+                            "outputs": {
+                                "summary": full_answer,  # Vext uses "summary" not "result"
+                                "citations": citations,
+                                "citation_type": citation_type
+                            },
+                            "elapsed_time": elapsed_time,
+                            "created_at": created_at,
+                            "finished_at": finished_at
                         }
                     })
 
@@ -626,6 +661,22 @@ async def get_answer(request: GetAnswerRequest):
             # Generate task_id
             task_id = str(uuid.uuid4())
             
+            # Format citations - use content_id if available, otherwise empty
+            citations = []
+            citation_type = "none"
+            
+            if content_id:
+                # If content_id is provided, use it as citation (matching Vext behavior)
+                citations = [{
+                    "title": content_id,
+                    "url": content_id,
+                    "content_id": content_id,
+                    "author": None,
+                    "publish_time": None,
+                    "thumbnail_url": None
+                }]
+                citation_type = "cached"
+            
             # Build response matching Vext API format from spec
             response = {
                 "event": "workflow_finished",
@@ -633,7 +684,9 @@ async def get_answer(request: GetAnswerRequest):
                 "data": {
                     "status": "succeeded",
                     "outputs": {
-                        "result": answer_result.get("answer", "")
+                        "summary": answer_result.get("answer", ""),  # Vext uses "summary" not "result"
+                        "citations": citations,
+                        "citation_type": citation_type
                     },
                     "elapsed_time": elapsed_time,
                     "created_at": created_at,
@@ -641,8 +694,8 @@ async def get_answer(request: GetAnswerRequest):
                 }
             }
             
-            # Cache result (5 minutes)
-            await cache_service.set(cache_key, response, ttl=300)
+            # Cache result (50 years - maximum TTL)
+            await cache_service.set(cache_key, response, ttl=MAX_TTL_SECONDS)
             
             return JSONResponse(content=response)
             
@@ -816,8 +869,8 @@ async def eeat_assessment(request: EEATAssessmentRequest):
             }
         }
         
-        # Cache result (1 hour)
-        await cache_service.set(cache_key, response, ttl=3600)
+        # Cache result (50 years - maximum TTL)
+        await cache_service.set(cache_key, response, ttl=MAX_TTL_SECONDS)
         
         return JSONResponse(content=response)
         
@@ -902,8 +955,8 @@ async def summarize(request: SummarizeRequest):
             "labels": summaries.get("labels", {})
         }
         
-        # Cache result (1 hour)
-        await cache_service.set(cache_key, response, ttl=3600)
+        # Cache result (50 years - maximum TTL)
+        await cache_service.set(cache_key, response, ttl=MAX_TTL_SECONDS)
         
         return JSONResponse(content=response)
         

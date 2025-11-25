@@ -406,7 +406,18 @@ Generate answer with optional SSE streaming. Can use `content_id` from `/generat
   "data": {
     "status": "succeeded",
     "outputs": {
-      "result": "Generated answer text..."
+      "summary": "Generated answer text...",
+      "citations": [
+        {
+          "title": "4beb171d-1d30-498c-af57-45763c314903",
+          "url": "4beb171d-1d30-498c-af57-45763c314903",
+          "content_id": "4beb171d-1d30-498c-af57-45763c314903",
+          "author": null,
+          "publish_time": null,
+          "thumbnail_url": null
+        }
+      ],
+      "citation_type": "cached"
     },
     "elapsed_time": 3.709378,
     "created_at": 1761248666,
@@ -415,7 +426,10 @@ Generate answer with optional SSE streaming. Can use `content_id` from `/generat
 }
 ```
 
-**Note:** If `content_id` is provided, it retrieves content saved during `/generateQuestions`. Otherwise, it fetches from `url`. Set `"stream": true` for SSE streaming.
+**Response (streaming - final event):**
+The streaming response sends SSE events (`workflow_started`, `token_chunk`, `citations`, `workflow_finished`). The final `workflow_finished` event matches the non-streaming format above.
+
+**Note:** If `content_id` is provided, it retrieves content saved during `/generateQuestions` and includes it in citations with `citation_type: "cached"`. Otherwise, it fetches from `url`. Set `"stream": true` for SSE streaming.
 
 **Error Handling:**
 - If `content_id` is provided but not found or expired (content expires after 10 minutes from `/generateQuestions`), the API returns `"status": "failed"` with empty `outputs: {}`
