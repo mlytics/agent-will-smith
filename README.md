@@ -24,14 +24,19 @@ Python FastAPI server that replaces the Vext API with Google Gemini backend. Mai
 
 ### 1. Install Dependencies
 
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+
 ```bash
-pip install -r requirements.txt
+# Install uv if you haven't already
+pip install uv
+
+# Sync dependencies (creates virtual environment and installs all dependencies)
+uv sync
 ```
 
-**For Python 3.13:** If you encounter Rust errors, use:
+**Alternative (without uv):**
 ```bash
-pip install --only-binary :all: -r requirements.txt
-pip install --only-binary :all: lxml
+pip install -e .
 ```
 
 ### 2. Configure Environment
@@ -200,10 +205,13 @@ curl -X POST http://localhost:8888/summarize \
 
 #### Run Automated Tests
 ```bash
-# Install test dependencies
-pip install -r requirements.txt
+# Install test dependencies (if using uv)
+uv sync --extra test
 
 # Run all tests (uses default test domain: https://m.cnyes.com/news/id/5627491)
+# With uv:
+uv run pytest tests/ -v
+# Or without uv:
 pytest tests/ -v
 
 # Run with custom test domain
@@ -748,8 +756,8 @@ docker run -p 8888:8888 --env-file .env aigc-api-server
 
 ### Installation Issues
 
-- **Python 3.13 Rust errors**: Use pre-built wheels (see Quick Start) or use Python 3.11/3.12
-- **Missing modules**: `pip install --upgrade pip && pip install -r requirements.txt`
+- **Python 3.13 Rust errors**: Use pre-built wheels or use Python 3.11/3.12
+- **Missing modules**: `uv sync` (or `pip install -e .` if not using uv)
 
 ### Connection Issues
 
@@ -760,7 +768,7 @@ docker run -p 8888:8888 --env-file .env aigc-api-server
 ### Server Issues
 
 - **Port in use**: Change `PORT` in `.env` or kill process using port 8888
-- **Import errors**: Verify all dependencies installed: `pip install -r requirements.txt`
+- **Import errors**: Verify all dependencies installed: `uv sync` (or `pip install -e .` if not using uv)
 
 ## Project Structure
 
@@ -771,7 +779,7 @@ app.py                    # FastAPI main application
 │   ├── search_service.py    # Google Search & web scraping
 │   ├── cache_service.py     # Redis/file caching
 │   └── content_service.py   # Content fetching
-└── requirements.txt         # Python dependencies
+└── pyproject.toml          # Python dependencies (uv/pip)
 ```
 
 ## License
