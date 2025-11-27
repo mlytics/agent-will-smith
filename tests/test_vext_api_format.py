@@ -303,11 +303,11 @@ class TestVextAPIGetAnswer:
         assert "data" in data
         assert data["data"]["status"] == "succeeded"
         
-        # Verify outputs structure
+        # Verify outputs structure (Vext API uses "summary" not "result")
         outputs = data["data"]["outputs"]
-        assert "result" in outputs
-        assert isinstance(outputs["result"], str)
-        assert len(outputs["result"]) > 0
+        assert "summary" in outputs
+        assert isinstance(outputs["summary"], str)
+        assert len(outputs["summary"]) > 0
         
         # Verify timestamps
         assert "elapsed_time" in data["data"]
@@ -355,11 +355,11 @@ class TestVextAPIGetAnswer:
         assert response.status_code == 200
         data = response.json()
         
-        # Verify Vext format
+        # Verify Vext format (uses "summary" not "result")
         assert data["event"] == "workflow_finished"
         assert "task_id" in data
         assert data["data"]["status"] == "succeeded"
-        assert "result" in data["data"]["outputs"]
+        assert "summary" in data["data"]["outputs"]
 
 
 class TestVextAPISearchBehavior:

@@ -730,7 +730,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """Handle validation errors with detailed messages"""
     logger.error(f"Validation error on {request.url.path}: {exc.errors()}")
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "detail": exc.errors(),
             "message": "Request validation failed. Please check your request format."

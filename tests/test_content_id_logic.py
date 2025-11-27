@@ -158,7 +158,7 @@ class TestContentIDLogic:
     @patch('app.cache_service.get', new_callable=AsyncMock)
     @patch('app.cache_service.set', new_callable=AsyncMock)
     def test_content_id_not_found_returns_empty(self, mock_cache_set, mock_cache_get, mock_get_content, mock_gemini, auth_headers):
-        """Test that when content_id is not found, empty content is used"""
+        """Test that when content_id is not found, returns failed status"""
         mock_cache_get.return_value = None
         mock_cache_set.return_value = None
         mock_get_content.return_value = ""  # Not found
@@ -179,7 +179,10 @@ class TestContentIDLogic:
             headers=auth_headers
         )
         
-        # Should still work but with empty content
+        # Should return failed status when content_id not found
         assert response.status_code == 200
-        call_args = mock_gemini.call_args
-        assert call_args[1]["content"] == ""
+        data = response.json()
+        assert data["data"]["status"] == "failed"
+        assert data["data"]["outputs"] == {}
+        # Gemini should not be called when content_id is not found
+        mock_gemini.assert_not_called()
