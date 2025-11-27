@@ -45,3 +45,7 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Development/Testing files
+postman_collection.json
+deploy-cloudrun.sh
+

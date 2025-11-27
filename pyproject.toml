@@ -9,7 +9,6 @@ dependencies = [
     "uvicorn[standard]",
     "google-generativeai",
     "httpx",
-    "redis",
     "python-dotenv",
     "pydantic",
     "pydantic-settings",
