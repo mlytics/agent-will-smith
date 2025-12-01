@@ -67,7 +67,7 @@ if not API_BEARER_TOKEN:
 gemini_service = GeminiService()
 search_service = SearchService()
 cache_service = CacheService()
-content_service = ContentService()
+content_service = ContentService(cache_service=cache_service)
 
 
 async def verify_bearer_token(authorization: str = Header(default=None)) -> None:
@@ -144,6 +144,7 @@ class GetMetadataInput(BaseModel):
     query: Optional[str] = ""
     url: Optional[str] = None
     tag_prompt: Optional[str] = ""
+    max_results: Optional[int] = 5
 
 class GetMetadataRequest(BaseModel):
     inputs: GetMetadataInput
@@ -383,7 +384,8 @@ async def get_metadata(request: GetMetadataRequest):
         metadata_result = await search_service.get_metadata(
             url=inputs.url,
             query=inputs.query or "",
-            tag_prompt=inputs.tag_prompt
+            tag_prompt=inputs.tag_prompt,
+            max_results=inputs.max_results or 5
         )
         
         # Calculate timestamps
@@ -496,8 +498,15 @@ async def get_answer(request: GetAnswerRequest):
         
         if content_id:
             content_text = await content_service.get_content(content_id)
-            # Validate: if content_id provided but content is empty, fail like Vext
-            if not content_text:
+            # If content_id not found but URL is provided, fall back to fetching from URL
+            if not content_text and url:
+                logger.info(f"Content ID {content_id} not found, falling back to URL: {url}")
+                content_text = await content_service.fetch_content(url)
+                # If successfully fetched from URL, save it with the content_id for future use
+                if content_text:
+                    await content_service.save_content(content_id, content_text, url)
+            # If content_id provided but content is still empty (no URL fallback), fail like Vext
+            elif not content_text:
                 # Return Vext format: 200 OK with status "failed" in data
                 created_at = int(start_time)
                 finished_at = int(time.time())

@@ -57,7 +57,8 @@ class SearchService:
         self,
         url: str,
         query: Optional[str] = None,
-        tag_prompt: Optional[str] = None
+        tag_prompt: Optional[str] = None,
+        max_results: int = 5
     ) -> Dict[str, Any]:
         """
         Extract metadata from URL
@@ -66,6 +67,7 @@ class SearchService:
             url: Target URL
             query: Optional search query
             tag_prompt: Optional tag generation prompt
+            max_results: Maximum number of search results to return (default: 5)
             
         Returns:
             Dict with metadata (title, summary, sources, tags, images)
@@ -93,7 +95,7 @@ class SearchService:
             if query:
                 # Add site: restriction to query (per spec: site:cnyes.com)
                 site_query = f"site:{domain} {query}"
-                search_results = await self._google_search(site_query)
+                search_results = await self._google_search(site_query, num_results=max_results)
                 # Additional domain filtering as safety check
                 filtered_results = []
                 for r in search_results:
@@ -110,7 +112,7 @@ class SearchService:
                         "snippet": r.get("snippet", ""),
                         "score": 0.9 - (i * 0.1)  # Decreasing score
                     }
-                    for i, r in enumerate(filtered_results[:5])
+                    for i, r in enumerate(filtered_results[:max_results])
                 ]
             
             return {

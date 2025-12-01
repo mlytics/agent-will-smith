@@ -11,13 +11,15 @@ RUN apt-get update && apt-get install -y \
 # Install uv
 RUN pip install uv
 
-# Copy project files (README.md needed for pyproject.toml)
-COPY pyproject.toml README.md ./
+# Copy project files needed for dependency installation
+COPY pyproject.toml ./
+# Create minimal README.md (needed for pyproject.toml, will be overwritten if actual README.md exists)
+RUN echo "# Agent-Will-Smith API Server" > README.md
 
 # Install Python dependencies using uv
 RUN uv pip install --system -e .
 
-# Copy application code
+# Copy application code (this will overwrite README.md with actual one if it exists)
 COPY . .
 
 # Create cache directory
