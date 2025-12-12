@@ -1,423 +1,328 @@
-# Agent-Will-Smith API Server
+# Agent Will Smith
 
-FastAPI server with Google Gemini backend. Maintains compatibility with existing Vext API contract.
+AI-powered product recommendation system using Databricks vector search, LangChain, and FastAPI.
 
-**Model**: Gemini 2.5 Flash Lite ($0.1/$0.4 per 1M tokens) - Cost-optimized choice vs Vext ($1/$1)
+## 🎯 Overview
 
-## Features
+This agent analyzes articles and questions to recommend relevant products (activities and books) using:
+- **Databricks Vector Search** for semantic product search
+- **LangChain** for agent orchestration (v1 API, LangGraph-ready)
+- **MLFlow** for prompt versioning and tracing
+- **FastAPI** for HTTP API with observability
 
-- **Five Core Endpoints**: `/generateQuestions`, `/getMetadata`, `/getAnswer`, `/eeat`, `/summarize`
-- **Gemini Integration**: Google Gemini for LLM operations
-- **E-E-A-T Assessment**: Content quality analysis based on Google's Search Quality Rater Guidelines
-- **Multi-Language Support**: Questions and answers in multiple languages via `lang` parameter
-- **File-based Caching**: Automatic caching with no setup required
-- **Streaming Support**: Server-Sent Events (SSE) for real-time answer generation
-- **API Compatibility**: Maintains exact request/response format from Vext API
+## 📁 Project Structure
 
-## Prerequisites
-
-- Python 3.11+ (3.11/3.12 recommended)
-- Google Gemini API key ([Get one here](https://ai.google.dev/))
-
-## Quick Start
-
-### Installation
-
-This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
-
-```bash
-# Install uv if you haven't already
-pip install uv
-
-# Sync dependencies (creates virtual environment and installs all dependencies)
-uv sync
+```
+agent-will-smith/
+├── app/                           # FastAPI application layer
+│   ├── main.py                   # Application entry point
+│   ├── config.py                 # Declarative configuration (Pydantic)
+│   ├── middleware/               # Auth & observability
+│   │   ├── auth.py              # Bearer token authentication
+│   │   └── observability.py     # Structured logging & metrics
+│   └── api/
+│       ├── schemas.py           # API request/response models
+│       └── routes.py            # HTTP endpoints (1 URL ↔ 1 agent)
+│
+├── agent/                        # Agent implementation
+│   ├── product_recommendation_agent.py  # Main agent (flow controller)
+│   ├── schemas.py               # Agent state & response schemas
+│   └── scorers.py               # MLFlow evaluation scorers
+│
+├── core/                         # Reusable tool library
+│   ├── tools/
+│   │   └── vector_search.py    # Databricks vector search tools
+│   ├── memory/
+│   │   └── context_manager.py  # Memory funnel (single entry point)
+│   └── prompts/
+│       └── loader.py           # MLFlow prompt loading utilities
+│
+├── tests/                        # Test suite
+│   ├── test_agent.py
+│   ├── test_tools.py
+│   └── test_api.py
+│
+├── Dockerfile                    # Container configuration
+├── pyproject.toml               # Dependencies & project metadata
+├── env.example                  # Environment variables template
+└── README.md
 ```
 
-**Alternative (without uv):**
+## 🏗️ Architecture Principles
+
+This codebase follows strict architectural guidelines for maintainability and future migration to LangGraph:
+
+### **Domain Boundaries**
+- **`agent/`**: Each agent is self-contained (1 HTTP URL ↔ 1 agent)
+- **`core/tools/`**: Reusable, deterministic, single-purpose tools
+- **`app/`**: HTTP layer, middleware, orchestration wiring
+
+### **Key Design Decisions**
+
+1. **Separation of Concerns**
+   - Tools do work (vector search, data retrieval)
+   - Prompts guide reasoning (loaded from MLFlow)
+   - Orchestration decides sequence (agent runtime)
+
+2. **Single Flow Controller**
+   - Agent runtime in `product_recommendation_agent.py` decides next steps
+   - No scattered if/else flow across modules
+   - LangGraph-ready design for future migration
+
+3. **Explicit State Schema**
+   - All boundaries use typed schemas (Pydantic/dataclasses)
+   - Tools return structured data, not English strings
+   - No string boundaries pushing complexity into prompts
+
+4. **Declarative Configuration**
+   - All config in `app/config.py` (Pydantic Settings)
+   - Environment variables for secrets/deployment-specific values
+   - No scattered constants across codebase
+
+## 🚀 Quick Start
+
+### **Prerequisites**
+- Python 3.12+
+- Databricks workspace with:
+  - Vector search endpoint
+  - Activities and books indexes
+  - LLM serving endpoint
+  - MLFlow experiment
+
+### **1. Clone & Setup**
+
 ```bash
+cd agent-will-smith
+
+# Copy environment template
+cp env.example .env
+
+# Edit .env with your Databricks credentials and endpoints
+```
+
+### **2. Configure Environment Variables**
+
+Edit `.env` with your settings:
+
+```bash
+# Databricks (REQUIRED)
+DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
+DATABRICKS_CLIENT_ID=your-client-id
+DATABRICKS_CLIENT_SECRET=your-client-secret
+
+# MLFlow (REQUIRED)
+MLFLOW_EXPERIMENT_ID=your-experiment-id
+
+# Vector Search (REQUIRED)
+VECTOR_SEARCH_ENDPOINT=your-endpoint-name
+ACTIVITIES_INDEX=aigc_sit.default.activities_mock
+BOOKS_INDEX=aigc_sit.default.books_mock
+
+# Authentication
+API_KEY=your-secure-api-key-here
+```
+
+### **3. Install Dependencies**
+
+```bash
+# Using pip
 pip install -e .
+
+# Or using uv (faster)
+uv pip install -e .
 ```
 
-### Configuration
-
-Create `.env` file:
-
-```env
-# Required
-GEMINI_API_KEY=your_gemini_api_key_here
-API_BEARER_TOKEN=change_me
-ALLOWED_ORIGINS=https://your-allowed-origin.com
-
-# Optional
-GEMINI_MODEL=gemini-2.5-flash-lite  # Cost: $0.1/$0.4 per 1M tokens
-HOST=0.0.0.0
-PORT=8888
-LOG_LEVEL=INFO
-
-# Google Custom Search (optional - only for related sources)
-GOOGLE_SEARCH_KEY=
-GOOGLE_SEARCH_ENGINE_ID=
-```
-
-### Run
+### **4. Run Locally**
 
 ```bash
-# Development
-uv run python run.py
+# Development mode (with auto-reload)
+python app/main.py
 
-# Or with Docker
-docker compose up --build
+# Or with uvicorn directly
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Server starts on `http://localhost:8888`
-
-### Health Check
+### **5. Test the API**
 
 ```bash
-curl http://localhost:8888/health
+curl -X POST "http://localhost:8000/api/v1/recommend-products" \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "article": "This article discusses sustainable living practices and eco-friendly lifestyle choices for modern families.",
+    "question": "What activities or books would help someone learn more about sustainable living?",
+    "k": 5
+  }'
 ```
 
-## API Endpoints
+## 📡 API Endpoints
 
-All POST endpoints require `Authorization: Bearer <token>` header.
+### **POST /api/v1/recommend-products**
+Recommend products based on article and question.
 
-### POST /generateQuestions
+**Authentication:** Bearer token required
 
-Generate 1-5 questions from URL or content.
-
-**Request:**
+**Request Body:**
 ```json
 {
-  "inputs": {
-    "url": "https://example.com/article",
-    "context": "Optional: direct content text",
-    "prompt": "Optional: custom prompt",
-    "lang": "zh-tw",
-    "previous_questions": []
-  },
-  "user": "test_user",
-  "type": "answer_page",
-  "source_url": "https://example.com/article"
+  "article": "string (min 10 chars)",
+  "question": "string (min 5 chars)",
+  "k": 1-10,
+  "product_types": ["activities", "books"] // optional filter
 }
 ```
 
 **Response:**
 ```json
 {
-  "task_id": "1d779a47-b403-427f-b4b4-9120d9841175",
-  "data": {
-    "status": "succeeded",
-    "outputs": {
-      "result": {
-        "question_1": "Question text 1",
-        "question_2": "Question text 2"
-      },
-      "content_id": "56e71457-c55d-4b13-bc8a-205cbdb42673"
-    },
-    "elapsed_time": 1.6,
-    "created_at": 1761248073,
-    "finished_at": 1761248075
-  }
-}
-```
-
-**Notes:**
-- If both `url` and `context` are provided, `context` takes precedence
-- `content_id` can be used in `/getAnswer` for session continuity
-- Default language is `zh-tw` if `lang` is omitted
-
-### POST /getMetadata
-
-Extract metadata (tags, images, sources) from URL with domain filtering.
-
-**Request:**
-```json
-{
-  "inputs": {
-    "url": "https://example.com/article",
-    "query": "Optional search query",
-    "tag_prompt": "Optional: custom tag generation prompt"
-  },
-  "user": "test_user"
-}
-```
-
-**Response:**
-```json
-{
-  "task_id": "1f802502-0c9c-4733-87fb-0a2499af6cbb",
-  "data": {
-    "status": "succeeded",
-    "outputs": {
-      "tag": "tag1, tag2, tag3",
-      "images": [{"images": "{\"images\": []}"}],
-      "sources": [{"sources": "{\"citations\": [...]}"}]
-    },
-    "elapsed_time": 2.41,
-    "created_at": 1761245271,
-    "finished_at": 1761245273
-  }
-}
-```
-
-**Notes:**
-- Search results are automatically filtered to match the input URL's domain
-- Domain is normalized (e.g., `m.cnyes.com` → `cnyes.com`)
-
-### POST /getAnswer
-
-Generate answer with optional SSE streaming. Supports `content_id` from `/generateQuestions` for session continuity.
-
-**Request:**
-```json
-{
-  "inputs": {
-    "query": "Your question",
-    "url": "https://example.com/article",
-    "content_id": "Optional: from generateQuestions response",
-    "prompt": "Optional: custom prompt",
-    "lang": "zh-tw"
-  },
-  "user": "test_user",
-  "stream": false
-}
-```
-
-**Response (non-streaming):**
-```json
-{
-  "event": "workflow_finished",
-  "task_id": "9737ff45-e015-4e2d-8505-c7525a655d50",
-  "data": {
-    "status": "succeeded",
-    "outputs": {
-      "summary": "Generated answer text...",
-      "citations": [...],
-      "citation_type": "cached"
-    },
-    "elapsed_time": 3.7,
-    "created_at": 1761248666,
-    "finished_at": 1761248670
-  }
-}
-```
-
-**Response (streaming):**
-Set `"stream": true` to receive Server-Sent Events:
-- `workflow_started` - Workflow begins
-- `token_chunk` - Streaming answer chunks
-- `citations` - Citation information
-- `workflow_finished` - Final response
-
-**Error Handling:**
-- If `content_id` is provided but not found, returns `"status": "failed"` with empty `outputs: {}`
-- If both `url` and `content_id` are empty, returns `"status": "failed"`
-
-### POST /eeat
-
-Assess E-E-A-T (Experience, Expertise, Authoritativeness, Trust) quality of content.
-
-**Request:**
-```json
-{
-  "inputs": {
-    "input_type": "url",
-    "url": "https://example.com/article",
-    "content": "Optional: direct content (if input_type is 'content')",
-    "metadata": {
-      "author": "Optional: author name",
-      "publish_date": "Optional: YYYY-MM-DD",
-      "topic_category": "Optional: medical|financial|general"
+  "products": [
+    {
+      "product_id": "string",
+      "product_type": "activity" | "book",
+      "title": "string",
+      "description": "string | null",
+      "relevance_score": 0.0-1.0,
+      "reasoning": "string",
+      "metadata": {}
     }
-  },
-  "user": "test_user"
+  ],
+  "trace_id": "string",
+  "processing_time_ms": 123.45
 }
 ```
 
-**Response:**
+### **GET /health**
+Health check endpoint for container orchestration.
+
+### **GET /ready**
+Readiness check endpoint.
+
+### **GET /metrics**
+System metrics (CPU, memory).
+
+### **GET /docs**
+Interactive API documentation (development only).
+
+## 🐳 Docker Deployment
+
+### **Build Image**
+```bash
+docker build -t agent-will-smith:latest .
+```
+
+### **Run Container**
+```bash
+docker run -p 8000:8000 \
+  --env-file .env \
+  agent-will-smith:latest
+```
+
+### **For EKS Deployment**
+
+See deployment manifests (to be added):
+- `k8s/deployment.yaml` - Kubernetes deployment
+- `k8s/service.yaml` - Service configuration
+- `k8s/hpa.yaml` - Horizontal Pod Autoscaler
+- `k8s/ingress.yaml` - Ingress configuration
+
+## 🔍 Observability
+
+### **Structured Logging**
+All logs are JSON-formatted with trace IDs:
+
 ```json
 {
-  "status": "success",
-  "data": {
-    "overall_level": "High E-E-A-T",
-    "scores": {
-      "experience": {"level": "High", "confidence": 0.85, "rationale": [...]},
-      "expertise": {"level": "High", "confidence": 0.78, "rationale": [...]},
-      "authoritativeness": {"level": "High", "confidence": 0.92, "rationale": [...]},
-      "trust": {"level": "Trustworthy", "confidence": 0.88, "rationale": [...]}
-    },
-    "page_quality_rating": "High",
-    "is_ymyl": true,
-    "evidence_summary": {...},
-    "recommendations": [...]
-  },
-  "metadata": {
-    "analyzed_at": "2025-11-15T10:30:00Z",
-    "processing_time_ms": 2340,
-    "content_length": 2500,
-    "language": "en"
-  }
+  "event": "request_completed",
+  "trace_id": "uuid",
+  "method": "POST",
+  "path": "/api/v1/recommend-products",
+  "status_code": 200,
+  "duration_ms": 234.56,
+  "cpu_delta_percent": 5.2,
+  "memory_mb": 128.5,
+  "timestamp": "2025-12-12T10:30:00.123Z"
 }
 ```
 
-**Notes:**
-- Use `input_type: "url"` to analyze from URL, or `input_type: "content"` for direct text
-- Both `/eeat` and `/api/v1/content/eeat-assessment` endpoints are available
+### **MLFlow Tracing**
+Every agent invocation is traced in MLFlow with:
+- LLM calls (model, tokens, latency)
+- Tool calls (inputs, outputs, timing)
+- Prompt versions used
+- Application version (git commit)
 
-### POST /summarize
+### **Metrics Collection**
+System metrics exposed at `/metrics`:
+- CPU usage percentage
+- Memory usage (MB and %)
+- Per-request resource deltas
 
-Generate comprehensive summaries for articles (designed for Intent Engine integration).
-
-**Request:**
-```json
-{
-  "title": "Article title",
-  "content": "Full article content text...",
-  "author": "Optional: author name",
-  "publish_time": "Optional: ISO 8601 timestamp",
-  "keywords": ["Optional", "array", "of", "keywords"],
-  "category": "Optional: category name",
-  "permalink": "Optional: article URL"
-}
-```
-
-**Response:**
-```json
-{
-  "full_summary": "Comprehensive 2-3 paragraph summary...",
-  "bullet_summary": ["Key point 1", "Key point 2", ...],
-  "semantic_paragraphs": {
-    "paragraphs": [
-      {"text": "...", "semantic_role": "introduction"},
-      {"text": "...", "semantic_role": "body"},
-      {"text": "...", "semantic_role": "conclusion"}
-    ]
-  },
-  "entities": {
-    "persons": [...],
-    "organizations": [...],
-    "locations": [...]
-  },
-  "labels": {
-    "topics": [...],
-    "sentiment": "positive",
-    "category": "金融",
-    "content_type": "news"
-  }
-}
-```
-
-## Language Support
-
-The API supports multiple languages through the `lang` parameter in `/generateQuestions` and `/getAnswer` endpoints.
-
-**Supported Languages:** `en`, `zh-tw` (default), `zh-cn`, `zh`, `es`, `fr`, `de`, `it`, `pt`, `ja`, `ko`, `ru`, `ar`, `hi`, `th`, `vi`, `id`, `nl`, `pl`, `tr`
-
-**Usage:**
-```json
-{
-  "inputs": {
-    "url": "https://example.com/article",
-    "lang": "en"  // or "ja", "es", etc.
-  }
-}
-```
-
-If `lang` is omitted, defaults to `"zh-tw"`. Language code is case-insensitive.
-
-## Caching
-
-- **File-based caching**: Automatic caching using `./cache` directory
-- Cache files stored as JSON
-- No additional setup required
-- Results are cached to improve response times
-
-## Testing
+## 🧪 Testing
 
 ```bash
-# Install test dependencies
-uv sync --extra test
+# Install dev dependencies
+pip install -e ".[dev]"
 
-# Run all tests
-uv run pytest -v
+# Run tests
+pytest
 
 # Run with coverage
-uv run pytest --cov=app --cov=services -v
+pytest --cov=app --cov=agent --cov=core
 ```
 
-**Test Configuration:**
-- `TEST_DOMAIN`: Test URL for API endpoints (default: `https://m.cnyes.com/news/id/5627491`)
-- `TEST_BASE_URL`: Base URL for domain extraction tests (default: `https://m.cnyes.com`)
+## 📝 Adding New Agents
 
-## Deployment
+To add a new agent following the same patterns:
 
-### Development
+1. **Create agent module**: `agent/your_agent.py`
+2. **Define schemas**: `agent/schemas.py` (add new state/response)
+3. **Create tools** (if needed): `core/tools/your_tools.py`
+4. **Add route**: `app/api/routes.py` (1 URL ↔ 1 agent)
+5. **Register in MLFlow**: Create prompt in MLFlow registry
 
-```bash
-uv run python run.py
-```
+## 🔐 Security Considerations
 
-### Production
+- **API Key**: Use strong, random keys in production
+- **Environment Variables**: Never commit `.env` to git
+- **Container Security**: Non-root user in Docker (appuser:1000)
+- **Rate Limiting**: Consider adding rate limiting middleware
+- **Input Validation**: Pydantic validates all inputs
 
-```bash
-uvicorn app:app --host 0.0.0.0 --port 8888 --workers 4
-```
+## 📚 Key Guidelines Followed
 
-### Docker
+This codebase strictly adheres to these principles:
 
-```bash
-# Build and run
-docker compose up --build
+1. **Architecture boundaries**: Tools, orchestration, and prompts are separate
+2. **Single flow controller**: Agent decides sequence, not tools/prompts
+3. **Explicit state**: TypedDict/Pydantic models for all state
+4. **Typed boundaries**: Schemas at every component boundary
+5. **Small tools**: Single-purpose, deterministic tools
+6. **Declarative config**: All configuration in one place
+7. **Structured outputs**: Tools return dicts/models, not strings
+8. **Explicit errors**: Clear error handling strategy
+9. **Observability**: Log state, not vibes - structured logs everywhere
+10. **LangChain v1**: Modern APIs for smooth LangGraph migration
 
-# Or manually
-docker build -t aigc-api-server .
-docker run -p 8888:8888 --env-file .env aigc-api-server
-```
+## 🔄 Future Enhancements
 
-### Google Cloud Run
+- [ ] Add LangGraph support for complex workflows
+- [ ] Implement caching layer for vector search
+- [ ] Add rate limiting middleware
+- [ ] Enhanced evaluation suite with MLFlow
+- [ ] Kubernetes deployment manifests
+- [ ] CI/CD pipeline configuration
+- [ ] Advanced filtering (date ranges, categories)
+- [ ] User preference persistence
 
-```bash
-./deploy-cloudrun.sh
-```
+## 📄 License
 
-## Security
+[Your License Here]
 
-- **Bearer Token Authentication**: All POST endpoints require `Authorization: Bearer <token>`
-  - Configure via `API_BEARER_TOKEN` environment variable
-  - If unset (local development), authentication is skipped with a warning
-- **CORS**: Control allowed origins via `ALLOWED_ORIGINS` (comma-separated)
-  - If omitted, only localhost origins are allowed
-- **Secrets**: Store sensitive values in your deployment platform's secret manager
+## 🤝 Contributing
 
-## Troubleshooting
+[Contributing Guidelines]
 
-### Installation Issues
+---
 
-- **Python 3.13 Rust errors**: Use pre-built wheels or use Python 3.11/3.12
-- **Missing modules**: `uv sync` (or `pip install -e .` if not using uv)
+**Built with ❤️ following best practices for production AI agents**
 
-### Connection Issues
-
-- **API key invalid**: Check `.env` file contains correct `GEMINI_API_KEY`
-- **Connection timeout**: Check firewall, VPN, or network restrictions
-
-### Server Issues
-
-- **Port in use**: Change `PORT` in `.env` or kill process using port 8888
-- **Import errors**: Verify all dependencies installed: `uv sync`
-
-## Project Structure
-
-```
-app.py                    # FastAPI main application
-├── services/
-│   ├── gemini_service.py    # Gemini API integration
-│   ├── search_service.py    # Google Search & web scraping
-│   ├── cache_service.py     # File-based caching
-│   └── content_service.py   # Content fetching
-└── pyproject.toml          # Python dependencies (uv/pip)
-```
-
-## License
-
-MIT
