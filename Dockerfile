@@ -25,9 +25,9 @@ COPY . .
 # Create cache directory
 RUN mkdir -p /app/cache
 
-# Expose port (Cloud Run will set PORT env var)
-EXPOSE 8888
+# Expose port (Cloud Run will set PORT env var, defaults to 8080)
+EXPOSE 8080
 
-# Run the application - use PORT env var or default to 8888
-CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-8888}
+# Run the application - use PORT env var or default to 8080 (Cloud Run standard)
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}
 
