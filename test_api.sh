@@ -2,9 +2,9 @@
 # Sample API test script
 
 API_URL="http://localhost:8000"
-API_KEY="dev-api-key-replace-in-production"
+API_KEY="dev-local-test-key-please-change"
 
-echo "🧪 Testing Product Recommendation Agent API"
+echo "🧪 Testing Agent Will Smith API"
 echo "==========================================="
 echo ""
 

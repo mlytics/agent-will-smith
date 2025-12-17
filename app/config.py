@@ -5,7 +5,7 @@ This follows the guideline: "Make configuration declarative."
 """
 
 from typing import Literal
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,10 +40,15 @@ class Settings(BaseSettings):
         description="Bearer token for API authentication",
     )
 
-    # Databricks
+    # Databricks Authentication
     databricks_host: str = Field(..., description="Databricks workspace URL")
-    databricks_client_id: str = Field(..., description="Databricks OAuth client ID")
-    databricks_client_secret: str = Field(..., description="Databricks OAuth client secret")
+    
+    # LOCAL DEVELOPMENT: Personal Access Token (for local dev)
+    databricks_token: str | None = Field(default=None, description="Databricks personal access token")
+    
+    # PRODUCTION: OAuth credentials (for production, requires service principal)
+    databricks_client_id: str | None = Field(default=None, description="Databricks OAuth client ID")
+    databricks_client_secret: str | None = Field(default=None, description="Databricks OAuth client secret")
 
     # MLFlow
     mlflow_tracking_uri: str = Field(default="databricks", description="MLFlow tracking URI")
@@ -82,7 +87,7 @@ class Settings(BaseSettings):
 
     # Prompt Management
     prompt_name: str = Field(
-        default="prompts:/aigc_sit.intent_engine.product_recommendation_prompt/1",
+        default="prompts:/aigc_sit.intent_engine_sit.product_recommendation_prompt/1",
         description="MLFlow prompt registry path",
     )
 
@@ -92,6 +97,14 @@ class Settings(BaseSettings):
     metrics_interval_seconds: int = Field(
         default=60, description="Metrics collection interval"
     )
+
+    @field_validator("llm_max_tokens", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        """Convert empty string to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return v
 
 
 # Global settings instance

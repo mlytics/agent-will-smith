@@ -12,7 +12,7 @@ dependencies = [
     
     # LangChain & Databricks
     "langchain>=1.1.0",
-    "langgraph>=1.0.4",
+    # "langgraph>=1.0.4",  # Commented out - will be needed for future migration
     "databricks-langchain>=0.11.0",
     "databricks-sdk>=0.73.0",
     "databricks-vectorsearch>=0.40",
@@ -47,6 +47,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent", "app", "core"]
 
 [tool.black]
 line-length = 100

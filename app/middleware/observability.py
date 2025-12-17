@@ -19,6 +19,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 
 # Configure structured logging
+# Note: Logs are JSON formatted for production parsing
+# Set LOG_LEVEL=DEBUG in .env to see all logs
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -29,7 +31,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer(),
+        structlog.processors.JSONRenderer(),  # JSON format for production
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,

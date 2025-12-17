@@ -22,10 +22,30 @@ logger = structlog.get_logger(__name__)
 
 
 def configure_databricks():
-    """Configure Databricks environment variables."""
+    """Configure Databricks environment variables.
+    
+    Supports two authentication methods:
+    1. Personal Access Token (DATABRICKS_TOKEN) - for local development
+    2. OAuth credentials (CLIENT_ID + SECRET) - for production
+    """
     os.environ["DATABRICKS_HOST"] = settings.databricks_host
-    os.environ["DATABRICKS_CLIENT_ID"] = settings.databricks_client_id
-    os.environ["DATABRICKS_CLIENT_SECRET"] = settings.databricks_client_secret
+    
+    # Option 1: Use Personal Access Token if provided (simpler for local dev)
+    if settings.databricks_token:
+        os.environ["DATABRICKS_TOKEN"] = settings.databricks_token
+        logger.info("databricks_auth_configured", method="personal_access_token")
+    
+    # Option 2: Use OAuth credentials (for production with service principal)
+    elif settings.databricks_client_id and settings.databricks_client_secret:
+        os.environ["DATABRICKS_CLIENT_ID"] = settings.databricks_client_id
+        os.environ["DATABRICKS_CLIENT_SECRET"] = settings.databricks_client_secret
+        logger.info("databricks_auth_configured", method="oauth")
+    
+    else:
+        raise ValueError(
+            "Databricks authentication not configured. "
+            "Provide either DATABRICKS_TOKEN or (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET)"
+        )
 
 
 def configure_mlflow():
@@ -48,6 +68,10 @@ async def lifespan(app: FastAPI):
         app: FastAPI application instance
     """
     # Startup
+    print("\n" + "="*70)
+    print("🚀 AGENT WILL SMITH STARTING")
+    print("="*70)
+    
     logger.info(
         "application_starting",
         app_name=settings.app_name,
@@ -59,11 +83,17 @@ async def lifespan(app: FastAPI):
     configure_mlflow()
 
     logger.info("application_ready", host=settings.host, port=settings.port)
+    
+    print(f"✅ Application ready at http://{settings.host}:{settings.port}")
+    print(f"📚 Environment: {settings.environment}")
+    print(f"🔍 Log Level: {settings.log_level}")
+    print("="*70 + "\n")
 
     yield
 
     # Shutdown
     logger.info("application_shutting_down")
+    print("\n🛑 Application shutdown complete\n")
 
 
 # Create FastAPI application

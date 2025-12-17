@@ -22,6 +22,8 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
+
+
 @router.post(
     "/recommend-products",
     response_model=RecommendProductsResponse,
@@ -29,12 +31,13 @@ router = APIRouter()
     description="""
     Analyzes an article and question to recommend relevant products (activities and books).
     
-    Uses semantic search across Databricks vector indexes and LangChain agent reasoning
-    to select the most relevant products.
+    Implementation:
+    - Uses Databricks vector search for semantic product retrieval
+    - Direct tool orchestration (LangChain, LangGraph-ready architecture)
+    - LLM reasoning for selection and ranking
     
+    **Architecture:** Simple and predictable flow, ready for LangGraph migration when needed.
     **Authentication:** Requires Bearer token in Authorization header.
-    
-    **Rate limits:** Consider implementing rate limiting for production use.
     """,
     tags=["Recommendations"],
 )

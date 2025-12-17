@@ -14,6 +14,9 @@ class AgentContext:
 
     This context is passed to tools via ToolRuntime and provides
     access to request-scoped information.
+    
+    NOTE: Currently only used by @tool decorated functions (for future LangGraph).
+    The simple agent uses direct function calls without ToolRuntime.
     """
 
     trace_id: str

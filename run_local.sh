@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🚀 Starting Product Recommendation Agent"
+echo "🚀 Starting Agent Will Smith"
 echo "========================================"
 
 # Check if .env exists
