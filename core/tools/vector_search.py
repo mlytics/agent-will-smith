@@ -11,7 +11,7 @@ from typing import Literal
 from langchain.tools import tool, ToolRuntime
 from databricks.vector_search.client import VectorSearchClient
 
-from app.config import settings
+from core.config import config
 from agent.schemas import AgentContext, ProductResult
 import structlog
 
@@ -101,12 +101,12 @@ def _search_vector_index(
                product_type=product_type,
                query_length=len(query_text),
                num_results=num_results,
-               endpoint=settings.vector_search_endpoint)
+               endpoint=config.vector_search_endpoint)
     
     try:
         # Get vector search index
-        logger.debug("getting_vector_index", index_name=index_name, endpoint=settings.vector_search_endpoint)
-        index = client.get_index(endpoint_name=settings.vector_search_endpoint, index_name=index_name)
+        logger.debug("getting_vector_index", index_name=index_name, endpoint=config.vector_search_endpoint)
+        index = client.get_index(endpoint_name=config.vector_search_endpoint, index_name=index_name)
         logger.debug("vector_index_retrieved", index_name=index_name)
 
         # Define columns to fetch based on product type
@@ -261,7 +261,7 @@ def search_activities_direct(
         List of activity results as dictionaries
     """
     client = _create_vector_search_client()
-    num_results = min(max_results, settings.max_k_products)
+    num_results = min(max_results, config.max_k_products)
 
     logger.info(
         "searching_activities",
@@ -272,7 +272,7 @@ def search_activities_direct(
 
     results = _search_vector_index(
         client=client,
-        index_name=settings.activities_index,
+        index_name=config.activities_index,
         query_text=query,
         num_results=num_results,
         product_type="activity",
@@ -333,7 +333,7 @@ def search_books_direct(
         List of book results as dictionaries
     """
     client = _create_vector_search_client()
-    num_results = min(max_results, settings.max_k_products)
+    num_results = min(max_results, config.max_k_products)
 
     logger.info(
         "searching_books",
@@ -344,7 +344,7 @@ def search_books_direct(
 
     results = _search_vector_index(
         client=client,
-        index_name=settings.books_index,
+        index_name=config.books_index,
         query_text=query,
         num_results=num_results,
         product_type="book",

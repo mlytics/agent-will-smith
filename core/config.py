@@ -4,13 +4,14 @@ All configuration is declarative and loaded from environment variables.
 This follows the guideline: "Make configuration declarative."
 """
 
-from typing import Literal
+import os
+from typing import Literal, Any
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+class Config(BaseSettings):
+    """Application configuration loaded from environment variables."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -30,7 +31,6 @@ class Settings(BaseSettings):
     )
 
     # API Server
-    host: str = Field(default="0.0.0.0", description="API host")
     port: int = Field(default=8000, description="API port")
     reload: bool = Field(default=False, description="Enable auto-reload (dev only)")
 
@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # PRODUCTION: OAuth credentials (for production, requires service principal)
     databricks_client_id: str | None = Field(default=None, description="Databricks OAuth client ID")
     databricks_client_secret: str | None = Field(default=None, description="Databricks OAuth client secret")
+    
+    # ALTERNATIVE: Config profile (for local development with ~/.databrickscfg)
+    databricks_config_profile: str | None = Field(
+        default=None,
+        description="Databricks config profile name (e.g., 'dev', 'staging')"
+    )
 
     # MLFlow
     mlflow_tracking_uri: str = Field(default="databricks", description="MLFlow tracking URI")
@@ -106,7 +112,29 @@ class Settings(BaseSettings):
             return None
         return v
 
+    def model_post_init(self, __context: Any) -> None:
+        """Set environment variables required by Databricks SDKs.
+        
+        This ensures environment is ready before any code runs.
+        """
+        # Set Databricks host
+        os.environ.setdefault("DATABRICKS_HOST", self.databricks_host)
+        
+        # Set authentication based on what's provided
+        if self.databricks_token:
+            os.environ.setdefault("DATABRICKS_TOKEN", self.databricks_token)
+        elif self.databricks_client_id and self.databricks_client_secret:
+            os.environ.setdefault("DATABRICKS_CLIENT_ID", self.databricks_client_id)
+            os.environ.setdefault("DATABRICKS_CLIENT_SECRET", self.databricks_client_secret)
+        elif self.databricks_config_profile:
+            os.environ.setdefault("DATABRICKS_CONFIG_PROFILE", self.databricks_config_profile)
+        
+        # Set MLFlow configuration
+        os.environ.setdefault("MLFLOW_TRACKING_URI", self.mlflow_tracking_uri)
+        os.environ.setdefault("MLFLOW_REGISTRY_URI", self.mlflow_registry_uri)
+        os.environ.setdefault("MLFLOW_EXPERIMENT_ID", self.mlflow_experiment_id)
 
-# Global settings instance
-settings = Settings()
+
+# Global config instance
+config = Config()
 

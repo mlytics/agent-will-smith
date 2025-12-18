@@ -11,7 +11,7 @@ import mlflow
 import structlog
 from typing import Any
 
-from app.config import settings
+from core.config import config
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +24,7 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
     
     Args:
         prompt_name: Prompt registry path (format: "models:/catalog.schema.name/version")
-                    If None, uses settings.prompt_name
+                    If None, uses config.prompt_name
     
     Returns:
         Prompt text string
@@ -32,7 +32,7 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
     Raises:
         Exception: If prompt cannot be loaded (by design - no silent failures)
     """
-    prompt_path = prompt_name or settings.prompt_name
+    prompt_path = prompt_name or config.prompt_name
     
     try:
         logger.info("loading_prompt_from_mlflow", prompt_path=prompt_path)
@@ -102,18 +102,18 @@ def load_prompt_from_registry_with_fallback(
     try:
         return load_prompt_from_registry(prompt_name)
     except Exception as e:
-        if fallback_prompt and settings.environment == "development":
+        if fallback_prompt and config.environment == "development":
             logger.warning(
                 "using_fallback_prompt_dev_only",
                 error=str(e),
-                environment=settings.environment
+                environment=config.environment
             )
             return fallback_prompt
         else:
             # In production, always fail hard
             logger.error(
                 "prompt_load_failed_no_fallback",
-                environment=settings.environment
+                environment=config.environment
             )
             raise
 

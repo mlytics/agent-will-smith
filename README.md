@@ -1,14 +1,18 @@
 # Agent Will Smith
 
-AI-powered product recommendation system using Databricks vector search, LangChain, and FastAPI.
+AI Agent Platform built with Databricks vector search, LangChain, and FastAPI.
 
 ## 🎯 Overview
 
-This agent analyzes articles and questions to recommend relevant products (activities and books) using:
-- **Databricks Vector Search** for semantic product search
+This platform provides a scalable foundation for deploying AI agents that leverage:
+- **Databricks Vector Search** for semantic search capabilities
 - **LangChain** for agent orchestration (v1 API, LangGraph-ready)
 - **MLFlow** for prompt versioning and tracing
 - **FastAPI** for HTTP API with observability
+
+### Current Agents
+
+**Product Recommendation Agent** - Analyzes articles and questions to recommend relevant products (activities and books) using semantic search and intent analysis.
 
 ## 📁 Project Structure
 
@@ -16,7 +20,6 @@ This agent analyzes articles and questions to recommend relevant products (activ
 agent-will-smith/
 ├── app/                           # FastAPI application layer
 │   ├── main.py                   # Application entry point
-│   ├── config.py                 # Declarative configuration (Pydantic)
 │   ├── middleware/               # Auth & observability
 │   │   ├── auth.py              # Bearer token authentication
 │   │   └── observability.py     # Structured logging & metrics
@@ -29,7 +32,9 @@ agent-will-smith/
 │   ├── schemas.py               # Agent state & response schemas
 │   └── scorers.py               # MLFlow evaluation scorers
 │
-├── core/                         # Reusable tool library
+├── core/                         # Framework-agnostic core library
+│   ├── config.py                # Declarative configuration (Pydantic)
+│   ├── logger.py                # Structured logging configuration
 │   ├── tools/
 │   │   └── vector_search.py    # Databricks vector search tools
 │   ├── memory/
@@ -42,8 +47,10 @@ agent-will-smith/
 │   ├── test_tools.py
 │   └── test_api.py
 │
-├── Dockerfile                    # Container configuration
-├── pyproject.toml               # Dependencies & project metadata
+├── Dockerfile                    # Production container configuration
+├── docker-compose.yml           # Local development setup
+├── pyproject.toml               # Dependencies & project metadata (PEP 621)
+├── uv.lock                      # Dependency lock file (generated)
 ├── env.example                  # Environment variables template
 └── README.md
 ```
@@ -125,21 +132,24 @@ API_KEY=your-secure-api-key-here
 ### **3. Install Dependencies**
 
 ```bash
-# Using pip
-pip install -e .
+# Using uv (recommended - faster and more reliable)
+uv sync
 
-# Or using uv (faster)
-uv pip install -e .
+# Or using pip
+pip install -e .
 ```
 
 ### **4. Run Locally**
 
 ```bash
-# Development mode (with auto-reload)
-python app/main.py
+# Using docker-compose (recommended)
+docker-compose up
 
-# Or with uvicorn directly
+# Or run directly with uvicorn
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Or with uv
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### **5. Test the API**
@@ -205,13 +215,30 @@ Interactive API documentation (development only).
 
 ## 🐳 Docker Deployment
 
-### **Build Image**
+### **Local Development with Docker Compose**
 ```bash
-docker build -t agent-will-smith:latest .
+# Start the application
+docker-compose up
+
+# Rebuild after dependency changes
+docker-compose up --build
+
+# Run in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
 ```
 
-### **Run Container**
+### **Production Docker Build**
 ```bash
+# Build image
+docker build -t agent-will-smith:latest .
+
+# Run container
 docker run -p 8000:8000 \
   --env-file .env \
   agent-will-smith:latest

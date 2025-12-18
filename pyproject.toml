@@ -29,10 +29,6 @@ dependencies = [
     
     # Observability
     "structlog>=24.0.0",
-    "psutil>=6.0.0",
-    
-    # Utilities
-    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

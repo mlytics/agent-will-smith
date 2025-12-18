@@ -4,7 +4,6 @@ Main application setup with middleware, routes, and lifecycle management.
 Follows guideline: "One controller of flow" - FastAPI handles HTTP orchestration.
 """
 
-import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -12,50 +11,26 @@ from fastapi.responses import JSONResponse
 import mlflow
 import structlog
 
-from app.config import settings
+from core.config import config
+from core.logger import configure_logging
 from app.middleware.auth import verify_api_key
-from app.middleware.observability import ObservabilityMiddleware, get_system_metrics
+from app.middleware.observability import ObservabilityMiddleware
 from app.api.schemas import HealthCheckResponse
 from app.api.routes import router as api_router
+
+# Configure logging on application import
+configure_logging(config.log_level)
 
 logger = structlog.get_logger(__name__)
 
 
-def configure_databricks():
-    """Configure Databricks environment variables.
-    
-    Supports two authentication methods:
-    1. Personal Access Token (DATABRICKS_TOKEN) - for local development
-    2. OAuth credentials (CLIENT_ID + SECRET) - for production
-    """
-    os.environ["DATABRICKS_HOST"] = settings.databricks_host
-    
-    # Option 1: Use Personal Access Token if provided (simpler for local dev)
-    if settings.databricks_token:
-        os.environ["DATABRICKS_TOKEN"] = settings.databricks_token
-        logger.info("databricks_auth_configured", method="personal_access_token")
-    
-    # Option 2: Use OAuth credentials (for production with service principal)
-    elif settings.databricks_client_id and settings.databricks_client_secret:
-        os.environ["DATABRICKS_CLIENT_ID"] = settings.databricks_client_id
-        os.environ["DATABRICKS_CLIENT_SECRET"] = settings.databricks_client_secret
-        logger.info("databricks_auth_configured", method="oauth")
-    
-    else:
-        raise ValueError(
-            "Databricks authentication not configured. "
-            "Provide either DATABRICKS_TOKEN or (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET)"
-        )
-
-
 def configure_mlflow():
-    """Configure MLFlow for tracking and tracing."""
-    os.environ["MLFLOW_TRACKING_URI"] = settings.mlflow_tracking_uri
-    os.environ["MLFLOW_REGISTRY_URI"] = settings.mlflow_registry_uri
-    os.environ["MLFLOW_EXPERIMENT_ID"] = settings.mlflow_experiment_id
-
+    """Configure MLFlow for tracking and tracing.
+    
+    Note: Databricks environment variables are now set in Config.model_post_init()
+    """
     # Enable MLFlow tracing if configured
-    if settings.enable_tracing:
+    if config.enable_tracing:
         mlflow.langchain.autolog()
         logger.info("mlflow_tracing_enabled")
 
@@ -68,42 +43,33 @@ async def lifespan(app: FastAPI):
         app: FastAPI application instance
     """
     # Startup
-    print("\n" + "="*70)
-    print("🚀 AGENT WILL SMITH STARTING")
-    print("="*70)
-    
     logger.info(
         "application_starting",
-        app_name=settings.app_name,
-        version=settings.app_version,
-        environment=settings.environment,
+        app_name=config.app_name,
+        version=config.app_version,
+        environment=config.environment,
     )
 
-    configure_databricks()
     configure_mlflow()
 
-    logger.info("application_ready", host=settings.host, port=settings.port)
-    
-    print(f"✅ Application ready at http://{settings.host}:{settings.port}")
-    print(f"📚 Environment: {settings.environment}")
-    print(f"🔍 Log Level: {settings.log_level}")
-    print("="*70 + "\n")
+    logger.info("application_ready",
+               port=config.port,
+               log_level=config.log_level)
 
     yield
 
     # Shutdown
     logger.info("application_shutting_down")
-    print("\n🛑 Application shutdown complete\n")
 
 
 # Create FastAPI application
 app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    description="Product recommendation agent using Databricks vector search and LangChain",
+    title=config.app_name,
+    version=config.app_version,
+    description="AI Agent Platform using Databricks vector search and LangChain",
     lifespan=lifespan,
-    docs_url="/docs" if settings.environment == "development" else None,
-    redoc_url="/redoc" if settings.environment == "development" else None,
+    docs_url="/docs" if config.environment == "development" else None,
+    redoc_url="/redoc" if config.environment == "development" else None,
 )
 
 # Add observability middleware
@@ -119,8 +85,8 @@ async def health_check():
     """
     return HealthCheckResponse(
         status="healthy",
-        version=settings.app_version,
-        environment=settings.environment,
+        version=config.app_version,
+        environment=config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -135,23 +101,27 @@ async def readiness_check():
     # TODO: Add checks for Databricks connectivity, vector search availability, etc.
     return HealthCheckResponse(
         status="healthy",
-        version=settings.app_version,
-        environment=settings.environment,
+        version=config.app_version,
+        environment=config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 
 @app.get("/metrics", tags=["Observability"])
 async def metrics(request: Request):
-    """Expose system metrics for monitoring.
+    """Basic metrics endpoint for monitoring.
+    
+    Note: For production, use container-level metrics (Prometheus, cAdvisor)
+    for accurate CPU/memory tracking. Request-level metrics are not reliable
+    in async contexts.
 
     Returns:
-        System metrics (CPU, memory)
+        Basic application metrics
     """
     return {
         "trace_id": getattr(request.state, "trace_id", None),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "metrics": get_system_metrics(),
+        "status": "healthy",
     }
 
 
@@ -185,20 +155,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={
             "error": "Internal server error",
-            "detail": str(exc) if settings.environment == "development" else None,
+            "detail": str(exc) if config.environment == "development" else None,
             "trace_id": trace_id,
         },
-    )
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.reload,
-        log_level=settings.log_level.lower(),
     )
 

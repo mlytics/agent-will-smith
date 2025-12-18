@@ -35,7 +35,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 import mlflow
 import structlog
 
-from app.config import settings
+from core.config import config
 from agent.schemas import AgentResponse, ProductResult
 from core.tools.vector_search import search_activities_direct, search_books_direct
 from core.prompts.loader import load_prompt_from_registry
@@ -80,18 +80,15 @@ def recommend_products(
     # CRITICAL: Load system prompt from MLflow (strict - no fallback)
     # If this fails, API returns 500 (proper governance - prompt MUST exist)
     # NOTE: Can consider fallback later, just not now cuz we're testing things
-    system_prompt = load_prompt_from_registry(prompt_name=settings.prompt_name)
+    system_prompt = load_prompt_from_registry(prompt_name=config.prompt_name)
     
     # Initialize LLM
     chat_model = ChatDatabricks(
-        endpoint=settings.llm_endpoint,
+        endpoint=config.llm_endpoint,
         temperature=1.0,  # Required for databricks-gpt-5-mini
     )
     
     # === STEP 1: Analyze Question for User Intent ===
-    print(f"\n{'='*70}")
-    print(f"📝 STEP 1: Analyzing User Intent")
-    print(f"{'='*70}")
     logger.info("step_1_analyzing_intent", trace_id=trace_id)
     
     intent_analysis_request = f"""Analyze this question to understand what the user is looking for:
@@ -109,16 +106,12 @@ Respond with 1-2 sentences describing what the user wants."""
             HumanMessage(content=intent_analysis_request)
         ])
         user_intent = intent_response.content.strip()
-        print(f"💡 Intent: {user_intent}")
         logger.info("intent_extracted", intent=user_intent, trace_id=trace_id)
     except Exception as e:
         logger.warning("intent_extraction_failed", error=str(e), trace_id=trace_id)
         user_intent = question  # Fallback to original question
     
     # === STEP 2: Search Vector Indexes ===
-    print(f"\n{'='*70}")
-    print(f"🔍 STEP 2: Searching Vector Indexes")
-    print(f"{'='*70}")
     logger.info("step_2_searching_indexes", trace_id=trace_id)
     
     # Combine intent + article for search query
@@ -128,7 +121,7 @@ Respond with 1-2 sentences describing what the user wants."""
     # Then select top k from the combined pool (2k total)
     # Example: k=3 → search 3 activities + 3 books → select top 3 from 6 total
     # This ensures we see both types before final ranking
-    max_results_per_index = min(k, settings.max_k_products)
+    max_results_per_index = min(k, config.max_k_products)
     
     all_products = []
     activities_count = 0
@@ -175,13 +168,7 @@ Respond with 1-2 sentences describing what the user wants."""
                books=books_count,
                trace_id=trace_id)
     
-    # Debug print for visibility
-    print(f"\n🔍 SEARCH RESULTS: Activities={activities_count}, Books={books_count}, Total={total_searched}")
-    
     # === STEP 3: Select Top K from Combined Results ===
-    print(f"\n{'='*70}")
-    print(f"🎯 STEP 3: Selecting Top {k} from {total_searched} Products")
-    print(f"{'='*70}")
     logger.info("step_3_selecting_top_k", total_products=total_searched, k=k, trace_id=trace_id)
     
     if not all_products:
@@ -207,14 +194,12 @@ Respond with 1-2 sentences describing what the user wants."""
                top_types=[p.get("product_type") for p in top_5_preview],
                trace_id=trace_id)
     
-    # Debug print for visibility
-    print(f"📊 TOP 5 AFTER SORTING:")
-    for i, p in enumerate(top_5_preview, 1):
-        print(f"  {i}. [{p.get('product_type')}] {p.get('title')[:50]}... (score: {p.get('relevance_score')})")
-    
     # Take top K
     top_k_products = sorted_products[:k]
-    print(f"✅ SELECTED TOP {k}: {[p.get('product_type') for p in top_k_products]}\n")
+    logger.debug("selected_top_k",
+                k=k,
+                product_types=[p.get('product_type') for p in top_k_products],
+                trace_id=trace_id)
     
     # Convert to ProductResult objects
     products = []
@@ -244,13 +229,6 @@ Respond with 1-2 sentences describing what the user wants."""
         products_count=len(products),
         total_searched=total_searched,
     )
-    
-    print(f"\n{'='*70}")
-    print(f"✅ AGENT COMPLETED")
-    print(f"   Returned: {len(products)} products")
-    print(f"   Searched: {total_searched} total")
-    print(f"   Trace ID: {trace_id}")
-    print(f"{'='*70}\n")
     
     return AgentResponse(
         products=products,
