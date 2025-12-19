@@ -17,13 +17,17 @@ logger = structlog.get_logger(__name__)
 
 
 def load_prompt_from_registry(prompt_name: str | None = None) -> str:
-    """Load prompt from MLflow registry (Unity Catalog).
+    """Load prompt from MLflow prompt registry (Unity Catalog).
     
     This is the ONLY way prompts should be loaded. No hardcoded fallbacks
     for production use.
     
+    IMPORTANT: Prompt must be created in Databricks UI first using the
+    "Create Prompt" feature in Unity Catalog.
+    
     Args:
-        prompt_name: Prompt registry path (format: "models:/catalog.schema.name/version")
+        prompt_name: Prompt registry path (format: "prompts:/catalog.schema.name/version")
+                    Must start with "prompts:/" (single slash)
                     If None, uses config.prompt_name
     
     Returns:
@@ -34,42 +38,27 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
     """
     prompt_path = prompt_name or config.prompt_name
     
+    # Validate prompt path format
+    if not prompt_path.startswith("prompts:/"):
+        raise ValueError(
+            f"Invalid prompt path format: {prompt_path}. "
+            f"Must start with 'prompts:/' (e.g., prompts:/catalog.schema.name/version)"
+        )
+    
     try:
         logger.info("loading_prompt_from_mlflow", prompt_path=prompt_path)
         
-        # Parse the model URI
-        # Format: models:/catalog.schema.model_name/version
-        from mlflow.tracking import MlflowClient
+        # Use MLflow's dedicated prompt loading API
+        # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
+        prompt = mlflow.genai.load_prompt(prompt_path)
         
-        client = MlflowClient()
-        
-        # Extract model name and version from path
-        model_path = prompt_path.replace("models:/", "")
-        model_name, version = model_path.rsplit("/", 1)
-        
-        # Get model version details
-        model_version = client.get_model_version(model_name, version)
-        run_id = model_version.run_id
-        
-        logger.info("prompt_model_found",
-                   model_name=model_name,
-                   version=version,
-                   run_id=run_id)
-        
-        # Download the prompt artifact from the run
-        artifact_path = mlflow.artifacts.download_artifacts(
-            run_id=run_id,
-            artifact_path="system_prompt.txt"
-        )
-        
-        # Read the prompt text
-        with open(artifact_path, 'r') as f:
-            prompt_text = f.read()
+        # Use .format() method to get the prompt text
+        # This is the standard way to extract text from MLflow prompt objects
+        prompt_text = prompt.format()
         
         logger.info("prompt_loaded_successfully",
                    prompt_path=prompt_path,
-                   prompt_length=len(prompt_text),
-                   version=version)
+                   prompt_length=len(prompt_text))
         
         return prompt_text
         

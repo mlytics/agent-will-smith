@@ -107,29 +107,48 @@ cp env.example .env
 # Edit .env with your Databricks credentials and endpoints
 ```
 
-### **2. Configure Environment Variables**
+### **2. Create System Prompt in Databricks**
+
+The agent requires a system prompt for intent analysis:
+
+📖 **Full Guide:** See [`docs/PROMPT_SETUP.md`](docs/PROMPT_SETUP.md)
+
+**Quick Steps:**
+1. Go to Databricks UI → ML → Prompts → Create Prompt
+2. Name: `aigc_uat.intent_engine.product_recommendation_prompt`
+3. Copy content from the guide
+4. Save and note the URI: `prompts://aigc_uat.intent_engine.product_recommendation_prompt/1`
+
+### **3. Configure Environment Variables**
 
 Edit `.env` with your settings:
 
 ```bash
 # Databricks (REQUIRED)
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-DATABRICKS_CLIENT_ID=your-client-id
-DATABRICKS_CLIENT_SECRET=your-client-secret
+DATABRICKS_TOKEN=your-personal-access-token  # For dev
 
 # MLFlow (REQUIRED)
 MLFLOW_EXPERIMENT_ID=your-experiment-id
 
 # Vector Search (REQUIRED)
 VECTOR_SEARCH_ENDPOINT=your-endpoint-name
-ACTIVITIES_INDEX=aigc_sit.default.activities_mock
-BOOKS_INDEX=aigc_sit.default.books_mock
+ACTIVITIES_INDEX=aigc_uat.intent_engine.content_activity_gold_index
+BOOKS_INDEX=aigc_uat.intent_engine.content_book_gold_index
+
+# Prompt (REQUIRED - from step 2)
+PROMPT_NAME=prompts:/aigc_uat.intent_engine.product_recommendation_prompt/1
 
 # Authentication
 API_KEY=your-secure-api-key-here
 ```
 
-### **3. Install Dependencies**
+**Test the prompt loading:**
+```bash
+python -m scripts.test_prompt
+```
+
+### **4. Install Dependencies**
 
 ```bash
 # Using uv (recommended - faster and more reliable)
@@ -139,7 +158,7 @@ uv sync
 pip install -e .
 ```
 
-### **4. Run Locally**
+### **5. Run Locally**
 
 ```bash
 # Using docker-compose (recommended)
@@ -152,7 +171,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### **5. Test the API**
+### **6. Test the API**
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/recommend-products" \

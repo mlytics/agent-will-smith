@@ -73,12 +73,16 @@ class Config(BaseSettings):
     # Vector Search
     vector_search_endpoint: str = Field(..., description="Databricks vector search endpoint name")
     activities_index: str = Field(
-        default="aigc_sit.default.activities_mock",
+        default="aigc_uat.intent_engine.content_activity_gold_index",
         description="Databricks vector search index for activities",
     )
     books_index: str = Field(
-        default="aigc_sit.default.books_mock",
+        default="aigc_uat.intent_engine.content_book_gold_index",
         description="Databricks vector search index for books",
+    )
+    articles_index: str = Field(
+        default="aigc_uat.intent_engine.content_article_gold_index",
+        description="Databricks vector search index for articles",
     )
     embedding_model: str = Field(
         default="databricks-gte-large-en", description="Embedding model name"
@@ -93,7 +97,7 @@ class Config(BaseSettings):
 
     # Prompt Management
     prompt_name: str = Field(
-        default="prompts:/aigc_sit.intent_engine_sit.product_recommendation_prompt/1",
+        default="prompts:/aigc_uat.intent_engine.product_recommendation_prompt/1",
         description="MLFlow prompt registry path",
     )
 
