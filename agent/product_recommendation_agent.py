@@ -1,43 +1,21 @@
-"""Product recommendation agent using LangChain.
+"""Product recommendation agent using LangChain Agent.
 
-Flow (3 steps, only Step 1 uses LLM):
-    API Request (article, question, k)
-      ↓
-    STEP 1: Intent Analysis [LLM: databricks-gpt-5-mini]
-      ├─ Load system prompt from MLflow (versioned, strict governance)
-      ├─ LLM extracts user intent from question + article context
-      └─ Output: Intent text (1-2 sentences)
-      ↓
-    STEP 2: Vector Search [No LLM - Managed by Databricks]
-      ├─ Query: intent + article → Databricks embeds query (gte-large-en)
-      ├─ Search activities index (k results by cosine similarity)
-      ├─ Search books index (k results by cosine similarity)
-      └─ Output: 2k products with relevance scores
-      ↓
-    STEP 3: Ranking [No LLM - Pure Python]
-      ├─ Sort combined products by relevance_score (descending)
-      ├─ Select top k from 2k candidates
-      └─ Output: AgentResponse with top k products
-      ↓
-    API Response
+Flow:
+    API Request → Agent analyzes → Calls tools → Returns structured response
 
-Few things that needs to be considered or improved:
-1. we probably only need one system prompt for now, with dynamic insertion of selected run time input. 
-2. we only use LLM for intent analysis, actual product recommendation was based on vector search and simple score ranking
-3. talk about the embedding storage could potentially grow inifnitely
-
-Architecture: LangGraph-ready (typed schemas, pure tools, explicit state)
-but keeps it simple until branching/loops needed.
+Agent decides dynamically which tools to call (search_activities, search_books).
+Tools receive AgentContext via ToolRuntime for state management.
 """
 
 from databricks_langchain import ChatDatabricks
-from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain.agents import create_agent
 import mlflow
 import structlog
 
 from core.config import config
-from agent.schemas import AgentResponse, ProductResult
-from core.tools.vector_search import search_activities_direct, search_books_direct
+from agent.schemas import AgentContext, AgentResponse, ProductResult
+from core.tools import search_activities, search_books
 from core.prompts.loader import load_prompt_from_registry
 
 logger = structlog.get_logger(__name__)
@@ -50,23 +28,20 @@ def recommend_products(
     trace_id: str,
     product_types: list[str] | None = None,
 ) -> AgentResponse:
-    """Product recommendation agent - sequential flow.
+    """Product recommendation agent.
     
-    Flow:
-    1. Analyze question → extract user intent
-    2. Search vector indexes (activities + books) using intent + article
-    3. Combine results → select top K by relevance
-    4. Return structured response
+    Agent analyzes article and question, decides which search tools to call,
+    and returns ranked product recommendations.
     
     Args:
-        article: Original article text to analyze
-        question: Selected question to guide recommendations
+        article: Article text to analyze
+        question: Question to guide recommendations
         k: Number of products to recommend (1-10)
         trace_id: Trace ID for observability
-        product_types: Optional filter for product types (activities, books)
+        product_types: Optional filter (activities, books)
         
     Returns:
-        Structured agent response with product recommendations
+        AgentResponse with products, reasoning, and total_searched
     """
     logger.info(
         "agent_started",
@@ -77,161 +52,209 @@ def recommend_products(
         product_types=product_types,
     )
     
-    # CRITICAL: Load system prompt from MLflow (strict - no fallback)
-    # If this fails, API returns 500 (proper governance - prompt MUST exist)
-    # NOTE: Can consider fallback later, just not now cuz we're testing things
-    system_prompt = load_prompt_from_registry(prompt_name=config.prompt_name)
+    # Load system prompt from MLflow
+    system_prompt_text = load_prompt_from_registry(prompt_name=config.prompt_name)
+    logger.info("prompt_loaded", trace_id=trace_id, prompt_length=len(system_prompt_text))
     
     # Initialize LLM
     chat_model = ChatDatabricks(
         endpoint=config.llm_endpoint,
-        temperature=1.0,  # Required for databricks-gpt-5-mini
+        temperature=config.llm_temperature,
     )
+    logger.info("llm_initialized", endpoint=config.llm_endpoint, trace_id=trace_id)
     
-    # === STEP 1: Analyze Question for User Intent ===
-    logger.info("step_1_analyzing_intent", trace_id=trace_id)
+    # Initialize checkpointer (stateless per request)
+    checkpointer = InMemorySaver()
     
-    intent_analysis_request = f"""Analyze this question to understand what the user is looking for:
-
-Question: {question}
-
-Article context: {article[:200]}...
-
-Extract the key intent and topics the user is interested in. Be concise.
-Respond with 1-2 sentences describing what the user wants."""
-    
-    try:
-        intent_response = chat_model.invoke([
-            SystemMessage(content=system_prompt),  # Use loaded prompt as system context
-            HumanMessage(content=intent_analysis_request)
-        ])
-        user_intent = intent_response.content.strip()
-        logger.info("intent_extracted", intent=user_intent, trace_id=trace_id)
-    except Exception as e:
-        logger.warning("intent_extraction_failed", error=str(e), trace_id=trace_id)
-        user_intent = question  # Fallback to original question
-    
-    # === STEP 2: Search Vector Indexes ===
-    logger.info("step_2_searching_indexes", trace_id=trace_id)
-    
-    # Combine intent + article for search query
-    search_query = f"{user_intent}\n\n{article}"
-    
-    # Search strategy: Get k results from EACH index (activities + books)
-    # Then select top k from the combined pool (2k total)
-    # Example: k=3 → search 3 activities + 3 books → select top 3 from 6 total
-    # This ensures we see both types before final ranking
-    max_results_per_index = min(k, config.max_k_products)
-    
-    all_products = []
-    activities_count = 0
-    books_count = 0
-    
-    # Search activities (if not filtered out)
+    # Select tools based on product type filter
+    tools = []
     if product_types is None or "activities" in product_types:
-        try:
-            activities_results = search_activities_direct(
-                query=search_query,
-                trace_id=trace_id,
-                max_results=max_results_per_index
-            )
-            activities_count = len(activities_results)
-            logger.info("activities_search_completed", 
-                       count=activities_count,
-                       trace_id=trace_id,
-                       sample_titles=[r.get("title") for r in activities_results[:2]])
-            all_products.extend(activities_results)
-        except Exception as e:
-            logger.error("activities_search_failed", error=str(e), trace_id=trace_id, exc_info=True)
-    
-    # Search books (if not filtered out)
+        tools.append(search_activities)
+        logger.info("tool_added", tool="search_activities", trace_id=trace_id)
     if product_types is None or "books" in product_types:
-        try:
-            books_results = search_books_direct(
-                query=search_query,
-                trace_id=trace_id,
-                max_results=max_results_per_index
-            )
-            books_count = len(books_results)
-            logger.info("books_search_completed", 
-                       count=books_count,
-                       trace_id=trace_id,
-                       sample_titles=[r.get("title") for r in books_results[:2]])
-            all_products.extend(books_results)
-        except Exception as e:
-            logger.error("books_search_failed", error=str(e), trace_id=trace_id, exc_info=True)
+        tools.append(search_books)
+        logger.info("tool_added", tool="search_books", trace_id=trace_id)
     
-    total_searched = len(all_products)
-    logger.info("total_products_found", 
-               total=total_searched,
-               activities=activities_count,
-               books=books_count,
-               trace_id=trace_id)
-    
-    # === STEP 3: Select Top K from Combined Results ===
-    logger.info("step_3_selecting_top_k", total_products=total_searched, k=k, trace_id=trace_id)
-    
-    if not all_products:
-        logger.warning("no_products_found", trace_id=trace_id)
+    if not tools:
+        logger.warning("no_tools_available", product_types=product_types, trace_id=trace_id)
         return AgentResponse(
             products=[],
-            reasoning="No relevant products found in the search results.",
+            reasoning="No product types requested for search.",
             total_searched=0
         )
     
-    # Sort by relevance score (highest first)
+    # Create context for tools (passed via ToolRuntime)
+    context = AgentContext(
+        trace_id=trace_id,
+        article=article,
+        question=question,
+        max_k=k,
+        product_types=product_types
+    )
+    logger.info("context_created", trace_id=trace_id)
+    
+    # Create agent (decides which tools to call)
+    try:
+        agent = create_agent(
+            model=chat_model,
+            system_prompt=system_prompt_text,
+            tools=tools,
+            context_schema=AgentContext,
+            checkpointer=checkpointer,
+        )
+        logger.info("agent_created", tools_count=len(tools), trace_id=trace_id)
+    except Exception as e:
+        logger.error("agent_creation_failed", error=str(e), trace_id=trace_id, exc_info=True)
+        raise
+    
+    # Construct user message
+    user_message = f"""Article Content:
+{article}
+
+Question: {question}
+
+Please analyze this article and question, then recommend the top {k} most relevant products.
+Use the available search tools (search_activities and/or search_books) to find relevant products.
+Consider the article's main topics and how they relate to the question.
+
+Return your recommendations with clear reasoning."""
+    
+    # Invoke agent with explicit budget
+    config_dict = {
+        "configurable": {"thread_id": trace_id},
+        "recursion_limit": config.max_agent_steps,
+    }
+    
+    logger.info("agent_invoking", trace_id=trace_id, max_steps=config.max_agent_steps)
+    
+    try:
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": user_message}]},
+            config=config_dict,
+            context=context,
+        )
+        logger.info("agent_completed", trace_id=trace_id)
+    except Exception as e:
+        logger.error("agent_invocation_failed", error=str(e), trace_id=trace_id, exc_info=True)
+        return AgentResponse(
+            products=[],
+            reasoning=f"Agent failed to complete: {str(e)}",
+            total_searched=0
+        )
+    
+    # Parse agent response
+    messages = response.get("messages", [])
+    logger.info("response_received", messages_count=len(messages), trace_id=trace_id)
+    
+    # Extract tool call results from messages
+    all_products_dict = {}  # Deduplicate by product_id
+    total_searched = 0
+    
+    for msg in messages:
+        if hasattr(msg, 'type') and msg.type == 'tool':
+            tool_name = getattr(msg, 'name', 'unknown')
+            logger.info("processing_tool_message", tool_name=tool_name, trace_id=trace_id)
+            
+            try:
+                import json
+                if isinstance(msg.content, str):
+                    tool_results = json.loads(msg.content)
+                else:
+                    tool_results = msg.content
+                
+                if isinstance(tool_results, list):
+                    for product_dict in tool_results:
+                        if isinstance(product_dict, dict):
+                            product_id = product_dict.get("product_id")
+                            if product_id:
+                                existing = all_products_dict.get(product_id)
+                                if existing is None or product_dict.get("relevance_score", 0) > existing.get("relevance_score", 0):
+                                    all_products_dict[product_id] = product_dict
+                                    total_searched += 1
+                    
+                    logger.info("tool_results_parsed",
+                               tool_name=tool_name,
+                               products_count=len(tool_results),
+                               trace_id=trace_id)
+            except Exception as e:
+                logger.error("tool_result_parse_failed",
+                           tool_name=tool_name,
+                           error=str(e),
+                           trace_id=trace_id,
+                           exc_info=True)
+    
+    all_products = list(all_products_dict.values())
+    logger.info("all_products_collected",
+               total_products=len(all_products),
+               total_searched=total_searched,
+               trace_id=trace_id)
+    
+    # Handle no results
+    if not all_products:
+        logger.warning("no_products_from_tools", trace_id=trace_id)
+        final_message = messages[-1] if messages else None
+        agent_reasoning = final_message.content if final_message and hasattr(final_message, 'content') else "No products found matching the criteria."
+        return AgentResponse(
+            products=[],
+            reasoning=agent_reasoning,
+            total_searched=total_searched
+        )
+    
+    # Sort by relevance score and select top K
     sorted_products = sorted(
         all_products,
         key=lambda x: x.get("relevance_score", 0.0),
         reverse=True
     )
-    
-    # Log sorting results
-    top_5_preview = sorted_products[:5]
     logger.info("products_sorted",
                total=len(sorted_products),
-               top_scores=[p.get("relevance_score") for p in top_5_preview],
-               top_types=[p.get("product_type") for p in top_5_preview],
+               top_3_scores=[p.get("relevance_score") for p in sorted_products[:3]],
                trace_id=trace_id)
     
-    # Take top K
     top_k_products = sorted_products[:k]
-    logger.debug("selected_top_k",
-                k=k,
-                product_types=[p.get('product_type') for p in top_k_products],
-                trace_id=trace_id)
     
     # Convert to ProductResult objects
     products = []
     for prod in top_k_products:
-        products.append(
-            ProductResult(
-                product_id=prod.get("product_id", "unknown"),
-                product_type=prod.get("product_type", "activity"),
-                title=prod.get("title", "Unknown"),
-                description=prod.get("description"),
-                relevance_score=prod.get("relevance_score", 0.0),
-                metadata=prod.get("metadata", {})
+        try:
+            products.append(
+                ProductResult(
+                    product_id=prod.get("product_id", "unknown"),
+                    product_type=prod.get("product_type", "activity"),
+                    title=prod.get("title", "Unknown"),
+                    description=prod.get("description"),
+                    relevance_score=prod.get("relevance_score", 0.0),
+                    metadata=prod.get("metadata", {})
+                )
             )
+        except Exception as e:
+            logger.error("product_result_creation_failed",
+                        error=str(e),
+                        product_dict=prod,
+                        trace_id=trace_id,
+                        exc_info=True)
+    
+    # Generate reasoning from agent's final message
+    final_message = messages[-1] if messages else None
+    if final_message and hasattr(final_message, 'content') and final_message.content:
+        agent_reasoning = final_message.content
+    else:
+        product_types_found = set(p.product_type for p in products)
+        agent_reasoning = (
+            f"Agent searched and found {len(all_products)} relevant products. "
+            f"Selected top {len(products)} products based on relevance scores. "
+            f"Product types: {', '.join(product_types_found)}."
         )
     
-    # Generate reasoning
-    product_types_str = ", ".join([p.product_type for p in products])
-    reasoning = (
-        f"Selected {len(products)} products based on semantic similarity to the article "
-        f"and alignment with user intent: '{user_intent[:100]}...'. "
-        f"Results include {product_types_str}."
-    )
-    
     logger.info(
-        "agent_completed",
+        "agent_finished",
         trace_id=trace_id,
-        products_count=len(products),
+        products_returned=len(products),
         total_searched=total_searched,
     )
     
     return AgentResponse(
         products=products,
-        reasoning=reasoning,
+        reasoning=agent_reasoning,
         total_searched=total_searched
     )

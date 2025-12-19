@@ -12,7 +12,7 @@ This platform provides a scalable foundation for deploying AI agents that levera
 
 ### Current Agents
 
-**Product Recommendation Agent** - Analyzes articles and questions to recommend relevant products (activities and books) using semantic search and intent analysis.
+**Product Recommendation Agent** - Uses LangChain React Agent to analyze articles and questions, dynamically deciding which search tools to use (activities and/or books). The agent reasons about search results and recommends the most relevant products.
 
 ## 📁 Project Structure
 
