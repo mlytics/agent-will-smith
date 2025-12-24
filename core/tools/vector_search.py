@@ -29,7 +29,7 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
         ProductResult object
     """
     if product_type == "activity":
-        product_id = result_dict.get("event_id", "unknown")
+        product_id = result_dict.get("content_id", "unknown")
         title = result_dict.get("title", "Untitled Activity")
         description = result_dict.get("description", None)
         metadata = {
@@ -39,18 +39,17 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
             "organizer": result_dict.get("organizer"),
             "start_time": result_dict.get("start_time"),
             "end_time": result_dict.get("end_time"),
-            "permalink": result_dict.get("permalink"),
+            "permalink_url": result_dict.get("permalink_url"),
         }
     else:  # book
-        product_id = result_dict.get("item_id", "unknown")
+        product_id = result_dict.get("content_id", "unknown")
         title = result_dict.get("title_main", "Untitled Book")
         description = result_dict.get("description", None)
         metadata = {
             "subtitle": result_dict.get("title_subtitle"),
-            "authors": result_dict.get("author", []),
-            "publisher": result_dict.get("publisher"),
-            "subjects": result_dict.get("subject", []),
-            "permalink": result_dict.get("permalink"),
+            "authors": result_dict.get("authors", []),
+            "categories": result_dict.get("categories", []),
+            "permalink_url": result_dict.get("permalink_url"),
         }
     
     # Get relevance score
@@ -113,7 +112,7 @@ def _search_vector_index(
         # CRITICAL: Must include primary key for product_id!
         if product_type == "activity":
             columns = [
-                "event_id",  # ⭐ PRIMARY KEY - REQUIRED
+                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
                 "title",
                 "description",
                 "category",
@@ -122,18 +121,17 @@ def _search_vector_index(
                 "organizer",
                 "start_time",
                 "end_time",
-                "permalink",
+                "permalink_url",
             ]
         else:  # book
             columns = [
-                "item_id",  # ⭐ PRIMARY KEY - REQUIRED
+                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
                 "title_main",
                 "title_subtitle",
                 "description",
-                "author",
-                "publisher",
-                "subject",
-                "permalink",
+                "authors",
+                "categories",
+                "permalink_url",
             ]
 
         # Execute similarity search
