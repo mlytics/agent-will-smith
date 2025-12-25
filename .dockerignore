@@ -4,75 +4,41 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 venv/
+env/
 ENV/
-.venv
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Cache
-cache/
-*.cache
-.pytest_cache/
-.coverage
-htmlcov/
+dist/
+build/
+requirements.txt
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.local
 
 # Git
 .git/
 .gitignore
-.gitattributes
 
-# Documentation
-*.md
-!README.md
+# Documentation (but keep README.md for package build)
+docs/
+HANDOFF.md
 
-# Testing
-tests/
-.pytest_cache/
-.coverage
-htmlcov/
-test_*.py
-*_test.py
+# CI/CD
+.github/
 
-# Docker
-docker-compose.yml
-Dockerfile.dev
-.dockerignore
-
-# OS
+# Misc
 .DS_Store
-Thumbs.db
-
-# Logs
 *.log
-logs/
-
-# Other
-postman_collection.json
-deploy-cloudrun.sh
-
