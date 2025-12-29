@@ -15,7 +15,6 @@ from agent.product_recommendation.infra.vector_search import (
     search_books_direct,
     search_articles_direct,
 )
-from core.exceptions import VectorSearchTimeout, VectorSearchError
 
 logger = structlog.get_logger(__name__)
 

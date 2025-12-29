@@ -13,7 +13,7 @@ Structure:
   - scorers.py: MLflow evaluation scorers
 """
 
-from agent.product_recommendation.agent import recommend_products, recommend_products_sync
+from agent.product_recommendation.agent import recommend_products
 
-__all__ = ["recommend_products", "recommend_products_sync"]
+__all__ = ["recommend_products"]
 

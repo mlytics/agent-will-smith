@@ -19,7 +19,7 @@ class ProductRecommendationAgentConfig(BaseSettings):
 
     # LLM Configuration
     llm_endpoint: str = Field(
-        default="databricks-gpt-5-mini", description="Databricks LLM endpoint name"
+        default="databricks-gpt-5-nano", description="Databricks LLM endpoint name"
     )
     llm_temperature: float = Field(default=0.7, description="LLM temperature", ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, description="Max tokens for LLM response")

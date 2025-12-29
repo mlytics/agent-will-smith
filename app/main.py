@@ -14,7 +14,6 @@ import structlog
 from core.config import config
 from core.logger import configure_logging
 from core.exceptions import map_exception_to_http_status
-from app.middleware.auth import verify_api_key
 from app.middleware.observability import ObservabilityMiddleware
 from app.gateway.dto.schemas import HealthCheckResponse
 from app.gateway.controller.routes import router as api_router
