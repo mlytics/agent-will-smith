@@ -14,9 +14,10 @@ import mlflow
 import structlog
 
 from core.config import config
-from agent.schemas import AgentContext, AgentResponse, ProductResult
-from core.tools import search_activities, search_books
-from core.prompts.loader import load_prompt_from_registry
+from agent.product_recommendation.config import agent_config
+from agent.product_recommendation.schemas import AgentContext, AgentResponse, ProductResult
+from agent.product_recommendation.infra.vector_search import search_activities, search_books
+from agent.product_recommendation.infra.prompts import load_prompt_from_registry
 
 logger = structlog.get_logger(__name__)
 
@@ -53,15 +54,15 @@ def recommend_products(
     )
     
     # Load system prompt from MLflow
-    system_prompt_text = load_prompt_from_registry(prompt_name=config.prompt_name)
+    system_prompt_text = load_prompt_from_registry(prompt_name=agent_config.prompt_name)
     logger.info("prompt_loaded", trace_id=trace_id, prompt_length=len(system_prompt_text))
     
     # Initialize LLM
     chat_model = ChatDatabricks(
-        endpoint=config.llm_endpoint,
-        temperature=config.llm_temperature,
+        endpoint=agent_config.llm_endpoint,
+        temperature=agent_config.llm_temperature,
     )
-    logger.info("llm_initialized", endpoint=config.llm_endpoint, trace_id=trace_id)
+    logger.info("llm_initialized", endpoint=agent_config.llm_endpoint, trace_id=trace_id)
     
     # Initialize checkpointer (stateless per request)
     checkpointer = InMemorySaver()
@@ -122,10 +123,10 @@ Return your recommendations with clear reasoning."""
     # Invoke agent with explicit budget
     config_dict = {
         "configurable": {"thread_id": trace_id},
-        "recursion_limit": config.max_agent_steps,
+        "recursion_limit": agent_config.max_agent_steps,
     }
     
-    logger.info("agent_invoking", trace_id=trace_id, max_steps=config.max_agent_steps)
+    logger.info("agent_invoking", trace_id=trace_id, max_steps=agent_config.max_agent_steps)
     
     try:
         response = agent.invoke(

@@ -1,28 +1,54 @@
-"""Agent state and DTO schemas for product recommendation agent.
+"""Agent-specific schemas for state management and responses.
 
-This module will contain:
-- AgentState: LangGraph workflow state (TypedDict)
-- DTOs: Database response objects (Pydantic models)
-- Message DTOs: Node input/output schemas
+Follows guideline: "Make state schema explicit early."
+Uses dataclasses (compatible with Pydantic) for type safety.
 """
 
-from typing import TypedDict, Literal
-from pydantic import BaseModel
+from dataclasses import dataclass
+from typing import Literal
 
 
-# Placeholder - will be implemented in later commits
-class AgentState(TypedDict):
-    """LangGraph state schema.
+@dataclass
+class AgentContext:
+    """Custom runtime context for the agent.
+
+    This context is passed to tools via ToolRuntime and provides
+    access to request-scoped information.
     
-    To be implemented in Commit 5.
+    NOTE: Currently only used by @tool decorated functions (for future LangGraph).
+    The simple agent uses direct function calls without ToolRuntime.
     """
-    pass
+
+    trace_id: str
+    article: str
+    question: str
+    max_k: int
+    product_types: list[Literal["activities", "books"]] | None = None
 
 
-class ProductDTO(BaseModel):
-    """Placeholder DTO.
-    
-    To be implemented in Commit 5.
+@dataclass
+class ProductResult:
+    """Structured result from vector search tools.
+
+    Follows guideline: "Tools return structured data, not English."
     """
-    pass
 
+    product_id: str
+    product_type: Literal["activity", "book"]
+    title: str
+    description: str | None
+    relevance_score: float
+    metadata: dict
+
+
+@dataclass
+class AgentResponse:
+    """Structured response format from the agent.
+
+    This is the final output that gets converted to the API response.
+    Follows guideline: "Prefer typed outputs at every boundary."
+    """
+
+    products: list[ProductResult]
+    reasoning: str
+    total_searched: int
