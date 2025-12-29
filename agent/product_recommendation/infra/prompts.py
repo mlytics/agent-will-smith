@@ -12,6 +12,7 @@ import structlog
 from typing import Any
 
 from core.config import config
+from agent.product_recommendation.config import agent_config
 
 logger = structlog.get_logger(__name__)
 
@@ -36,7 +37,7 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
     Raises:
         Exception: If prompt cannot be loaded (by design - no silent failures)
     """
-    prompt_path = prompt_name or config.prompt_name
+    prompt_path = prompt_name or agent_config.prompt_name
     
     # Validate prompt path format
     if not prompt_path.startswith("prompts:/"):
@@ -91,18 +92,20 @@ def load_prompt_from_registry_with_fallback(
     try:
         return load_prompt_from_registry(prompt_name)
     except Exception as e:
-        if fallback_prompt and config.environment == "development":
+        # Import here to avoid circular dependency
+        from core.config import config
+        if fallback_prompt and config.fastapi.environment == "development":
             logger.warning(
                 "using_fallback_prompt_dev_only",
                 error=str(e),
-                environment=config.environment
+                environment=config.fastapi.environment
             )
             return fallback_prompt
         else:
             # In production, always fail hard
             logger.error(
                 "prompt_load_failed_no_fallback",
-                environment=config.environment
+                environment=config.fastapi.environment
             )
             raise
 
