@@ -74,29 +74,33 @@ async def recommend_products_endpoint(
     start_time = time.time()
 
     try:
-        # Invoke agent (single flow controller)
-        agent_response = recommend_products(
+        # Invoke agent (LangGraph workflow)
+        agent_response = await recommend_products(
             article=body.article,
             question=body.question,
             k=body.k,
             trace_id=trace_id,
-            product_types=body.product_types,
+            verticals=body.product_types,  # Map product_types to verticals
+            customer_uuid=None,  # TODO: Extract from auth token
         )
 
-        # Transform agent response to API response
+        # Transform grouped results to flat list for API compatibility
         products = []
-        for product in agent_response.products:
-            products.append(
-                ProductRecommendation(
-                    product_id=product.product_id,
-                    product_type=product.product_type,
-                    title=product.title,
-                    description=product.description,
-                    relevance_score=product.relevance_score,
-                    reasoning=agent_response.reasoning,  # Share reasoning across all products
-                    metadata=product.metadata,
+        grouped_results = agent_response.get("grouped_results", {})
+        
+        for vertical, vertical_products in grouped_results.items():
+            for product_dict in vertical_products:
+                products.append(
+                    ProductRecommendation(
+                        product_id=product_dict["product_id"],
+                        product_type=product_dict["product_type"],
+                        title=product_dict["title"],
+                        description=product_dict.get("description"),
+                        relevance_score=product_dict["relevance_score"],
+                        reasoning=agent_response.get("intent", ""),  # Use intent as reasoning
+                        metadata=product_dict.get("metadata", {}),
+                    )
                 )
-            )
 
         processing_time_ms = (time.time() - start_time) * 1000
 
@@ -104,6 +108,8 @@ async def recommend_products_endpoint(
             "recommend_products_success",
             trace_id=trace_id,
             products_count=len(products),
+            total_by_vertical=agent_response.get("total_products", 0),
+            status=agent_response.get("status", "complete"),
             processing_time_ms=round(processing_time_ms, 2),
         )
 
