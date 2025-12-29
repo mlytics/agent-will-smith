@@ -6,12 +6,12 @@ No external calls, deterministic output.
 
 import structlog
 
-from agent.product_recommendation.schemas import AgentState
+from agent.product_recommendation.schemas import AgentState, ComposeResponseOutput
 
 logger = structlog.get_logger(__name__)
 
 
-def compose_response_node(state: AgentState) -> dict:
+def compose_response_node(state: AgentState) -> ComposeResponseOutput:
     """Compose final grouped response from search results.
     
     This is a pure function that:
@@ -30,9 +30,9 @@ def compose_response_node(state: AgentState) -> dict:
         - grouped_results: {vertical: [top_K_products]}
         - total_products: int (sum across all verticals)
     """
-    trace_id = state["trace_id"]
-    verticals = state["verticals"]
-    k = state["k"]
+    trace_id = state.trace_id
+    verticals = state.verticals
+    k = state.k
     
     logger.info("composing_response",
                trace_id=trace_id,
@@ -44,7 +44,7 @@ def compose_response_node(state: AgentState) -> dict:
     
     for vertical in verticals:
         # Get products for this vertical (may be empty)
-        products = state.get(vertical, [])
+        products = getattr(state, vertical, [])
         
         logger.debug("processing_vertical",
                     vertical=vertical,
@@ -75,10 +75,11 @@ def compose_response_node(state: AgentState) -> dict:
                trace_id=trace_id,
                total_products=total_products,
                verticals_with_results=[v for v, p in grouped_results.items() if p],
-               status=state.get("status", "complete"))
+               status=state.status)
     
-    return {
-        "grouped_results": grouped_results,
-        "total_products": total_products,
-    }
+    # Return validated Pydantic model directly (type-safe)
+    return ComposeResponseOutput(
+        grouped_results=grouped_results,
+        total_products=total_products,
+    )
 

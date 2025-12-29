@@ -14,7 +14,7 @@ import mlflow
 import structlog
 
 from agent.product_recommendation.workflow import get_workflow
-from agent.product_recommendation.schemas import AgentState
+from agent.product_recommendation.schemas import AgentState, AgentOutput
 
 logger = structlog.get_logger(__name__)
 
@@ -27,7 +27,7 @@ async def recommend_products(
     trace_id: str,
     verticals: list[str] | None = None,
     customer_uuid: str | None = None,
-) -> dict:
+) -> AgentOutput:
     """Product recommendation agent (LangGraph implementation).
     
     Analyzes article and question, searches requested verticals in parallel,
@@ -42,7 +42,7 @@ async def recommend_products(
         customer_uuid: Optional customer UUID for multi-tenant filtering
         
     Returns:
-        dict with:
+        AgentOutput (Pydantic model) with:
           - grouped_results: {vertical: [products]}
           - total_products: int
           - status: "complete" | "partial"
@@ -66,45 +66,48 @@ async def recommend_products(
     # Get workflow
     workflow = get_workflow()
     
-    # Initialize state
-    initial_state: AgentState = {
-        "article": article,
-        "question": question,
-        "k": k,
-        "verticals": verticals,
-        "trace_id": trace_id,
-        "customer_uuid": customer_uuid,
-    }
+    # Initialize state (Pydantic model)
+    initial_state = AgentState(
+        article=article,
+        question=question,
+        k=k,
+        verticals=verticals,
+        trace_id=trace_id,
+        customer_uuid=customer_uuid,
+    )
     
     logger.info("workflow_invoking",
                trace_id=trace_id,
                workflow_type="product_recommendation")
     
     try:
-        # Execute workflow
-        final_state = await workflow.ainvoke(initial_state)
+        # Execute workflow (returns dict, but validated by Pydantic during workflow)
+        final_state_dict = await workflow.ainvoke(initial_state)
+        
+        # Parse back to Pydantic for validation and type-safe access
+        final_state = AgentState(**final_state_dict)
         
         logger.info("workflow_completed",
                    trace_id=trace_id,
-                   total_products=final_state.get("total_products", 0),
-                   status=final_state.get("status", "unknown"))
+                   total_products=final_state.total_products,
+                   status=final_state.status)
         
-        # Extract results
-        result = {
-            "grouped_results": final_state.get("grouped_results", {}),
-            "total_products": final_state.get("total_products", 0),
-            "status": final_state.get("status", "complete"),
-            "errors": final_state.get("errors", {}),
-            "intent": final_state.get("intent", ""),
-        }
+        # Convert to AgentOutput
+        agent_output = AgentOutput(
+            grouped_results=final_state.grouped_results,
+            total_products=final_state.total_products,
+            status=final_state.status,
+            errors=final_state.errors,
+            intent=final_state.intent or "No intent provided",
+        )
         
         logger.info("agent_completed",
                    trace_id=trace_id,
-                   total_products=result["total_products"],
-                   status=result["status"],
-                   has_errors=bool(result["errors"]))
+                   total_products=agent_output.total_products,
+                   status=agent_output.status,
+                   has_errors=bool(agent_output.errors))
         
-        return result
+        return agent_output  # Return Pydantic model directly
         
     except Exception as e:
         logger.error("agent_execution_failed",

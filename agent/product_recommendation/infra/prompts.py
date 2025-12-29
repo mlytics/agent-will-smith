@@ -13,11 +13,12 @@ from typing import Any
 
 from core.config import config
 from agent.product_recommendation.config import agent_config
+from agent.product_recommendation.schemas import PromptContent
 
 logger = structlog.get_logger(__name__)
 
 
-def load_prompt_from_registry(prompt_name: str | None = None) -> str:
+def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
     """Load prompt from MLflow prompt registry (Unity Catalog).
     
     This is the ONLY way prompts should be loaded. No hardcoded fallbacks
@@ -32,7 +33,7 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
                     If None, uses config.prompt_name
     
     Returns:
-        Prompt text string
+        PromptContent (Pydantic model with validated text)
         
     Raises:
         Exception: If prompt cannot be loaded (by design - no silent failures)
@@ -61,7 +62,13 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> str:
                    prompt_path=prompt_path,
                    prompt_length=len(prompt_text))
         
-        return prompt_text
+        # Validate with Pydantic
+        prompt_content = PromptContent(
+            text=prompt_text,
+            source=prompt_path
+        )
+        
+        return prompt_content
         
     except Exception as e:
         logger.error(

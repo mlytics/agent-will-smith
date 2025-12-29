@@ -11,14 +11,14 @@ import structlog
 
 from core.config import config
 from agent.product_recommendation.config import agent_config
-from agent.product_recommendation.schemas import AgentState
+from agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
 from agent.product_recommendation.infra.prompts import load_prompt_from_registry
 from core.exceptions import IntentAnalysisError, LLMServiceError, LLMServiceTimeout
 
 logger = structlog.get_logger(__name__)
 
 
-def intent_analysis_node(state: AgentState) -> dict:
+def intent_analysis_node(state: AgentState) -> IntentAnalysisOutput:
     """Analyze intent with single LLM call.
     
     This is the ONLY LLM call in the workflow. It analyzes the article and question
@@ -35,15 +35,17 @@ def intent_analysis_node(state: AgentState) -> dict:
         LLMServiceError: If LLM service has issues
         LLMServiceTimeout: If LLM call times out
     """
-    trace_id = state["trace_id"]
+    trace_id = state.trace_id
     logger.info("intent_analysis_started", trace_id=trace_id)
     
     try:
-        # Load system prompt from MLflow
-        system_prompt = load_prompt_from_registry()
+        # Load system prompt from MLflow (returns PromptContent)
+        prompt_content = load_prompt_from_registry()
+        system_prompt = prompt_content.text
         logger.debug("intent_prompt_loaded", 
                     trace_id=trace_id, 
-                    prompt_length=len(system_prompt))
+                    prompt_length=len(system_prompt),
+                    prompt_source=prompt_content.source)
         
         # Initialize LLM
         llm = ChatDatabricks(
@@ -57,13 +59,13 @@ def intent_analysis_node(state: AgentState) -> dict:
         
         # Construct user message
         # Truncate article to avoid token limits (keep first 1000 chars)
-        article_excerpt = state["article"][:1000]
-        if len(state["article"]) > 1000:
+        article_excerpt = state.article[:1000]
+        if len(state.article) > 1000:
             article_excerpt += "..."
             
         user_message = f"""Article: {article_excerpt}
 
-Question: {state['question']}
+Question: {state.question}
 
 Please analyze the intent and key themes of this article and question. 
 What is the user looking for? What are the main topics?
@@ -72,7 +74,7 @@ Provide a concise intent summary (2-3 sentences max)."""
         logger.info("intent_analysis_invoking_llm",
                    trace_id=trace_id,
                    article_length=len(article_excerpt),
-                   question_length=len(state["question"]))
+                   question_length=len(state.question))
         
         # Single LLM call
         response = llm.invoke([
@@ -89,7 +91,8 @@ Provide a concise intent summary (2-3 sentences max)."""
                    trace_id=trace_id, 
                    intent_length=len(intent))
         
-        return {"intent": intent}
+        # Return validated Pydantic model directly (type-safe)
+        return IntentAnalysisOutput(intent=intent)
         
     except IntentAnalysisError:
         # Re-raise our custom exception

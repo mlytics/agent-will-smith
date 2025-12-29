@@ -76,8 +76,8 @@ async def recommend_products_endpoint(
     start_time = time.time()
 
     try:
-        # Invoke agent (LangGraph workflow)
-        agent_response = await recommend_products(
+        # Invoke agent (LangGraph workflow) - returns Pydantic AgentOutput
+        agent_output = await recommend_products(
             article=body.article,
             question=body.question,
             k=body.k,
@@ -87,13 +87,12 @@ async def recommend_products_endpoint(
         )
 
         # Transform grouped results to API response format
-        grouped_results = agent_response.get("grouped_results", {})
         verticals_searched = body.product_types or ["activities", "books", "articles"]
         
         results_by_vertical = []
         for vertical in verticals_searched:
-            vertical_products = grouped_results.get(vertical, [])
-            error = agent_response.get("errors", {}).get(vertical)
+            vertical_products = agent_output.grouped_results.get(vertical, [])
+            error = agent_output.errors.get(vertical)
             
             # Convert each product dict to ProductRecommendation
             products = [
@@ -103,7 +102,7 @@ async def recommend_products_endpoint(
                     title=p["title"],
                     description=p.get("description"),
                     relevance_score=p["relevance_score"],
-                    reasoning=agent_response.get("intent", ""),  # Use intent as reasoning
+                    reasoning=agent_output.intent,  # Use intent as reasoning
                     metadata=p.get("metadata", {}),
                 )
                 for p in vertical_products
@@ -123,17 +122,17 @@ async def recommend_products_endpoint(
         logger.info(
             "recommend_products_success",
             trace_id=trace_id,
-            total_products=agent_response.get("total_products", 0),
-            status=agent_response.get("status", "complete"),
+            total_products=agent_output.total_products,
+            status=agent_output.status,
             verticals_searched=verticals_searched,
             processing_time_ms=round(processing_time_ms, 2),
         )
 
         return RecommendProductsResponse(
             results_by_vertical=results_by_vertical,
-            total_products=agent_response.get("total_products", 0),
-            reasoning=agent_response.get("intent", "No intent provided"),
-            status=agent_response.get("status", "complete"),
+            total_products=agent_output.total_products,
+            reasoning=agent_output.intent,
+            status=agent_output.status,
             verticals_searched=verticals_searched,
             trace_id=trace_id,
             processing_time_ms=round(processing_time_ms, 2),

@@ -8,12 +8,11 @@ Follows guidelines:
 """
 
 from typing import Literal
-from langchain.tools import tool, ToolRuntime
 from databricks.vector_search.client import VectorSearchClient
 
 from core.config import config
 from agent.product_recommendation.config import agent_config
-from agent.product_recommendation.schemas import AgentContext, ProductResult
+from agent.product_recommendation.schemas import ProductResult
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -301,7 +300,7 @@ def search_activities_direct(
     trace_id: str,
     max_results: int = 10,
     customer_uuid: str | None = None,
-) -> list[dict]:
+) -> list[ProductResult]:
     """Search for relevant activities (direct call, no ToolRuntime).
 
     This is the direct function for calling outside of agent frameworks.
@@ -335,41 +334,8 @@ def search_activities_direct(
         customer_uuid=customer_uuid,
     )
 
-    # Convert to dict
-    return [
-        {
-            "product_id": r.product_id,
-            "product_type": r.product_type,
-            "title": r.title,
-            "description": r.description,
-            "relevance_score": r.relevance_score,
-            "metadata": r.metadata,
-        }
-        for r in results
-    ]
-
-
-@tool
-def search_activities(
-    query: str, runtime: ToolRuntime[AgentContext]
-) -> list[dict]:
-    """Search for relevant activities (for agent framework use).
-
-    This tool performs semantic search in the activities vector index.
-
-    Args:
-        query: Search query text
-        runtime: Tool runtime with agent context
-
-    Returns:
-        List of activity results as dictionaries
-    """
-    context = runtime.context
-    return search_activities_direct(
-        query=query,
-        trace_id=context.trace_id,
-        max_results=context.max_k
-    )
+    # Return Pydantic models directly for type safety
+    return results
 
 
 def search_books_direct(
@@ -377,7 +343,7 @@ def search_books_direct(
     trace_id: str,
     max_results: int = 10,
     customer_uuid: str | None = None,
-) -> list[dict]:
+) -> list[ProductResult]:
     """Search for relevant books (direct call, no ToolRuntime).
 
     This is the direct function for calling outside of agent frameworks.
@@ -411,41 +377,8 @@ def search_books_direct(
         customer_uuid=customer_uuid,
     )
 
-    # Convert to dict
-    return [
-        {
-            "product_id": r.product_id,
-            "product_type": r.product_type,
-            "title": r.title,
-            "description": r.description,
-            "relevance_score": r.relevance_score,
-            "metadata": r.metadata,
-        }
-        for r in results
-    ]
-
-
-@tool
-def search_books(
-    query: str, runtime: ToolRuntime[AgentContext]
-) -> list[dict]:
-    """Search for relevant books (for agent framework use).
-
-    This tool performs semantic search in the books vector index.
-
-    Args:
-        query: Search query text
-        runtime: Tool runtime with agent context
-
-    Returns:
-        List of book results as dictionaries
-    """
-    context = runtime.context
-    return search_books_direct(
-        query=query,
-        trace_id=context.trace_id,
-        max_results=context.max_k
-    )
+    # Return Pydantic models directly for type safety
+    return results
 
 
 def search_articles_direct(
@@ -453,7 +386,7 @@ def search_articles_direct(
     trace_id: str,
     max_results: int = 10,
     customer_uuid: str | None = None,
-) -> list[dict]:
+) -> list[ProductResult]:
     """Search for relevant articles (direct call, no ToolRuntime).
 
     This is the direct function for calling outside of agent frameworks.
@@ -487,39 +420,6 @@ def search_articles_direct(
         customer_uuid=customer_uuid,
     )
 
-    # Convert to dict
-    return [
-        {
-            "product_id": r.product_id,
-            "product_type": r.product_type,
-            "title": r.title,
-            "description": r.description,
-            "relevance_score": r.relevance_score,
-            "metadata": r.metadata,
-        }
-        for r in results
-    ]
-
-
-@tool
-def search_articles(
-    query: str, runtime: ToolRuntime[AgentContext]
-) -> list[dict]:
-    """Search for relevant articles (for agent framework use).
-
-    This tool performs semantic search in the articles vector index.
-
-    Args:
-        query: Search query text
-        runtime: Tool runtime with agent context
-
-    Returns:
-        List of article results as dictionaries
-    """
-    context = runtime.context
-    return search_articles_direct(
-        query=query,
-        trace_id=context.trace_id,
-        max_results=context.max_k
-    )
+    # Return Pydantic models directly for type safety
+    return results
 

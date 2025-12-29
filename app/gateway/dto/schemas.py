@@ -6,6 +6,7 @@ All API boundaries use Pydantic models for validation and documentation.
 
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
+from agent.product_recommendation.constants import VERTICALS
 
 
 class RecommendProductsRequest(BaseModel):
@@ -30,9 +31,9 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[Literal["activities", "books", "articles"]] | None = Field(
+    product_types: list[VERTICALS] | None = Field(
         default=None,
-        description="Filter by product types. If None, search all verticals (activities, books, articles).",
+        description="Filter by product types. If None, search all verticals.",
         examples=[["activities", "books", "articles"]],
     )
     customer_uuid: str = Field(

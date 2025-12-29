@@ -5,10 +5,10 @@ Architecture: Deterministic function-based tools, no LLM decision-making.
 """
 
 import asyncio
-from typing import Literal
 import structlog
 
-from agent.product_recommendation.schemas import AgentState
+from agent.product_recommendation.constants import VERTICALS
+from agent.product_recommendation.schemas import AgentState, ParallelSearchOutput, VerticalSearchResult
 from agent.product_recommendation.node.query_builder import build_search_query
 from agent.product_recommendation.infra.vector_search import (
     search_activities_direct,
@@ -23,13 +23,13 @@ VECTOR_SEARCH_TIMEOUT_SECONDS = 5.0
 
 
 async def search_vertical(
-    vertical: Literal["activities", "books", "articles"],
+    vertical: VERTICALS,
     query: str,
     k: int,
     trace_id: str,
     customer_uuid: str | None = None,
     timeout: float = VECTOR_SEARCH_TIMEOUT_SECONDS,
-) -> tuple[str, list[dict], str | None]:
+) -> VerticalSearchResult:
     """Search a single vertical with timeout.
     
     Args:
@@ -41,10 +41,10 @@ async def search_vertical(
         timeout: Timeout in seconds (default: 5s)
         
     Returns:
-        (vertical_name, results, error_message)
-        - vertical_name: "activities" | "books" | "articles"
-        - results: List of product dicts (empty if failed)
-        - error_message: None if success, error string if failed
+        VerticalSearchResult (Pydantic model) with:
+        - vertical: Literal type for which vertical
+        - products: List of product dicts (empty if failed)
+        - error: None if success, error string if failed
     """
     search_func_map = {
         "activities": search_activities_direct,
@@ -61,7 +61,8 @@ async def search_vertical(
     
     try:
         # Run search in thread pool with timeout
-        results = await asyncio.wait_for(
+        # Returns list[ProductResult] (Pydantic models)
+        product_results = await asyncio.wait_for(
             asyncio.to_thread(
                 search_func,
                 query=query,
@@ -72,19 +73,31 @@ async def search_vertical(
             timeout=timeout
         )
         
+        # Convert Pydantic models to dicts for state storage
+        results_dicts = [r.model_dump() for r in product_results]
+        
         logger.info("vertical_search_completed",
                    vertical=vertical,
                    trace_id=trace_id,
-                   results_count=len(results))
+                   results_count=len(results_dicts))
         
-        return (vertical, results, None)
+        # Return validated Pydantic model
+        return VerticalSearchResult(
+            vertical=vertical,
+            products=results_dicts,
+            error=None
+        )
         
     except asyncio.TimeoutError:
         logger.warning("vertical_search_timeout",
                       vertical=vertical,
                       trace_id=trace_id,
                       timeout=timeout)
-        return (vertical, [], f"Search timeout after {timeout}s")
+        return VerticalSearchResult(
+            vertical=vertical,
+            products=[],
+            error=f"Search timeout after {timeout}s"
+        )
         
     except Exception as e:
         logger.error("vertical_search_error",
@@ -93,10 +106,14 @@ async def search_vertical(
                     error=str(e),
                     error_type=type(e).__name__,
                     exc_info=True)
-        return (vertical, [], f"Search error: {str(e)}")
+        return VerticalSearchResult(
+            vertical=vertical,
+            products=[],
+            error=f"Search error: {str(e)}"
+        )
 
 
-async def parallel_search_node(state: AgentState) -> dict:
+async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
     """Execute vector searches for all requested verticals in parallel.
     
     This is a deterministic node - it searches exactly the verticals
@@ -120,20 +137,20 @@ async def parallel_search_node(state: AgentState) -> dict:
         - errors: dict[str, str]
         - status: "complete" | "partial"
     """
-    trace_id = state["trace_id"]
-    verticals = state["verticals"]
-    intent = state.get("intent", "")
+    trace_id = state.trace_id
+    verticals = state.verticals
+    intent = state.intent or ""
     
     logger.info("parallel_search_started",
                trace_id=trace_id,
                verticals=verticals,
-               k=state["k"],
+               k=state.k,
                has_intent=bool(intent))
     
     # Build search query from intent + article + question
     query = build_search_query(
-        article=state["article"],
-        question=state["question"],
+        article=state.article,
+        question=state.question,
         intent=intent,
     )
     
@@ -146,9 +163,9 @@ async def parallel_search_node(state: AgentState) -> dict:
         search_vertical(
             vertical=v,
             query=query,
-            k=state["k"],
+            k=state.k,
             trace_id=trace_id,
-            customer_uuid=state.get("customer_uuid"),
+            customer_uuid=state.customer_uuid,
             timeout=VECTOR_SEARCH_TIMEOUT_SECONDS,
         )
         for v in verticals
@@ -161,7 +178,7 @@ async def parallel_search_node(state: AgentState) -> dict:
     
     results = await asyncio.gather(*tasks)
     
-    # Aggregate results
+    # Aggregate results (results is list[VerticalSearchResult])
     updates = {
         "activities": [],
         "books": [],
@@ -169,13 +186,13 @@ async def parallel_search_node(state: AgentState) -> dict:
         "errors": {},
     }
     
-    for vertical, data, error in results:
-        updates[vertical] = data
-        if error:
-            updates["errors"][vertical] = error
+    for result in results:
+        updates[result.vertical] = result.products
+        if result.error:
+            updates["errors"][result.vertical] = result.error
             logger.warning("vertical_search_had_error",
-                          vertical=vertical,
-                          error=error,
+                          vertical=result.vertical,
+                          error=result.error,
                           trace_id=trace_id)
     
     # Determine overall status
@@ -199,5 +216,12 @@ async def parallel_search_node(state: AgentState) -> dict:
                status=updates["status"],
                errors_count=len(updates["errors"]))
     
-    return updates
+    # Return validated Pydantic model directly (type-safe)
+    return ParallelSearchOutput(
+        activities=updates["activities"],
+        books=updates["books"],
+        articles=updates["articles"],
+        errors=updates["errors"],
+        status=updates["status"],
+    )
 
