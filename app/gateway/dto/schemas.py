@@ -69,9 +69,7 @@ class RecommendProductsResponse(BaseModel):
     @field_validator("products")
     @classmethod
     def validate_products_count(cls, v: list[ProductRecommendation]) -> list[ProductRecommendation]:
-        """Ensure products list is not empty and within limits."""
-        if not v:
-            raise ValueError("At least one product must be recommended")
+        """Ensure products list is within limits. Empty list is allowed (no relevant products found)."""
         if len(v) > 10:
             raise ValueError("Cannot recommend more than 10 products")
         return v

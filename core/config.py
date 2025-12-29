@@ -40,21 +40,10 @@ class Config(BaseSettings):
         description="Bearer token for API authentication",
     )
 
-    # Databricks Authentication
+    # Databricks Authentication (OAuth only - service principal)
     databricks_host: str = Field(..., description="Databricks workspace URL")
-    
-    # LOCAL DEVELOPMENT: Personal Access Token (for local dev)
-    databricks_token: str | None = Field(default=None, description="Databricks personal access token")
-    
-    # PRODUCTION: OAuth credentials (for production, requires service principal)
-    databricks_client_id: str | None = Field(default=None, description="Databricks OAuth client ID")
-    databricks_client_secret: str | None = Field(default=None, description="Databricks OAuth client secret")
-    
-    # ALTERNATIVE: Config profile (for local development with ~/.databrickscfg)
-    databricks_config_profile: str | None = Field(
-        default=None,
-        description="Databricks config profile name (e.g., 'dev', 'staging')"
-    )
+    databricks_client_id: str = Field(..., description="Databricks OAuth client ID")
+    databricks_client_secret: str = Field(..., description="Databricks OAuth client secret")
 
     # MLFlow
     mlflow_tracking_uri: str = Field(default="databricks", description="MLFlow tracking URI")
@@ -120,18 +109,12 @@ class Config(BaseSettings):
         """Set environment variables required by Databricks SDKs.
         
         This ensures environment is ready before any code runs.
+        Uses OAuth authentication (client_id + client_secret) only.
         """
-        # Set Databricks host
+        # Set Databricks host and OAuth credentials
         os.environ.setdefault("DATABRICKS_HOST", self.databricks_host)
-        
-        # Set authentication based on what's provided
-        if self.databricks_token:
-            os.environ.setdefault("DATABRICKS_TOKEN", self.databricks_token)
-        elif self.databricks_client_id and self.databricks_client_secret:
-            os.environ.setdefault("DATABRICKS_CLIENT_ID", self.databricks_client_id)
-            os.environ.setdefault("DATABRICKS_CLIENT_SECRET", self.databricks_client_secret)
-        elif self.databricks_config_profile:
-            os.environ.setdefault("DATABRICKS_CONFIG_PROFILE", self.databricks_config_profile)
+        os.environ.setdefault("DATABRICKS_CLIENT_ID", self.databricks_client_id)
+        os.environ.setdefault("DATABRICKS_CLIENT_SECRET", self.databricks_client_secret)
         
         # Set MLFlow configuration
         os.environ.setdefault("MLFLOW_TRACKING_URI", self.mlflow_tracking_uri)

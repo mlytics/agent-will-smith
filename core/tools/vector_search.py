@@ -66,12 +66,17 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
 
 
 def _create_vector_search_client() -> VectorSearchClient:
-    """Create Databricks vector search client.
+    """Create Databricks vector search client with OAuth authentication.
 
     Returns:
-        Configured VectorSearchClient instance
+        Configured VectorSearchClient instance with service principal OAuth credentials.
     """
-    return VectorSearchClient(disable_notice=True)
+    return VectorSearchClient(
+        workspace_url=config.databricks_host,
+        service_principal_client_id=config.databricks_client_id,
+        service_principal_client_secret=config.databricks_client_secret,
+        disable_notice=True
+    )
 
 
 def _search_vector_index(

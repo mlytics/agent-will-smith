@@ -15,8 +15,8 @@ from core.config import config
 from core.logger import configure_logging
 from app.middleware.auth import verify_api_key
 from app.middleware.observability import ObservabilityMiddleware
-from app.api.schemas import HealthCheckResponse
-from app.api.routes import router as api_router
+from app.gateway.dto.schemas import HealthCheckResponse
+from app.gateway.controller.routes import router as api_router
 
 # Configure logging on application import
 configure_logging(config.log_level)

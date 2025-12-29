@@ -10,12 +10,12 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 import structlog
 
 from app.middleware.auth import verify_api_key
-from app.api.schemas import (
+from app.gateway.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,
 )
-from agent.product_recommendation_agent import recommend_products
+from agent import recommend_products
 
 logger = structlog.get_logger(__name__)
 
