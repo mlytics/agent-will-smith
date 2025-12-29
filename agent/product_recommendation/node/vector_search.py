@@ -68,7 +68,7 @@ async def search_vertical(
                 query=query,
                 trace_id=trace_id,
                 max_results=k,
-                # customer_uuid parameter will be added later for multi-tenant
+                customer_uuid=customer_uuid,
             ),
             timeout=timeout
         )

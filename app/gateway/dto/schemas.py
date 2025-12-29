@@ -25,7 +25,7 @@ class RecommendProductsRequest(BaseModel):
     )
     k: int = Field(
         ...,
-        description="Number of products to recommend (1-10)",
+        description="Number of products to recommend per vertical (1-10)",
         ge=1,
         le=10,
         examples=[5],
@@ -34,6 +34,11 @@ class RecommendProductsRequest(BaseModel):
         default=None,
         description="Filter by product types. If None, search all verticals (activities, books, articles).",
         examples=[["activities", "books", "articles"]],
+    )
+    customer_uuid: str = Field(
+        ...,
+        description="Customer UUID for multi-tenant data isolation",
+        examples=["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
     )
 
 

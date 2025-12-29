@@ -102,6 +102,7 @@ def _search_vector_index(
     query_text: str,
     num_results: int,
     product_type: Literal["activity", "book", "article"],
+    customer_uuid: str | None = None,
 ) -> list[ProductResult]:
     """Execute vector search query against a specific index.
 
@@ -111,6 +112,7 @@ def _search_vector_index(
         query_text: Query text to search for
         num_results: Number of results to return
         product_type: Type of product being searched
+        customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
         List of ProductResult objects
@@ -122,6 +124,7 @@ def _search_vector_index(
                product_type=product_type,
                query_length=len(query_text),
                num_results=num_results,
+               customer_uuid=customer_uuid,
                endpoint=agent_config.vector_search_endpoint)
     
     try:
@@ -172,12 +175,26 @@ def _search_vector_index(
                 "publish_time",
             ]
 
+        # Build filters for multi-tenant isolation
+        filters = {}
+        if customer_uuid:
+            filters["customer_uuid"] = customer_uuid
+            logger.debug("applying_customer_filter", customer_uuid=customer_uuid)
+        
         # Execute similarity search
-        results = index.similarity_search(
-            query_text=query_text,
-            columns=columns,
-            num_results=num_results,
-        )
+        if filters:
+            results = index.similarity_search(
+                query_text=query_text,
+                columns=columns,
+                filters=filters,
+                num_results=num_results,
+            )
+        else:
+            results = index.similarity_search(
+                query_text=query_text,
+                columns=columns,
+                num_results=num_results,
+            )
 
         # Parse response - Databricks vector search returns specific format
         products = []
@@ -283,6 +300,7 @@ def search_activities_direct(
     query: str,
     trace_id: str,
     max_results: int = 10,
+    customer_uuid: str | None = None,
 ) -> list[dict]:
     """Search for relevant activities (direct call, no ToolRuntime).
 
@@ -292,6 +310,7 @@ def search_activities_direct(
         query: Search query text
         trace_id: Trace ID for logging
         max_results: Maximum number of results to return
+        customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
         List of activity results as dictionaries
@@ -304,6 +323,7 @@ def search_activities_direct(
         trace_id=trace_id,
         query_length=len(query),
         num_results=num_results,
+        customer_uuid=customer_uuid,
     )
 
     results = _search_vector_index(
@@ -312,6 +332,7 @@ def search_activities_direct(
         query_text=query,
         num_results=num_results,
         product_type="activity",
+        customer_uuid=customer_uuid,
     )
 
     # Convert to dict
@@ -355,6 +376,7 @@ def search_books_direct(
     query: str,
     trace_id: str,
     max_results: int = 10,
+    customer_uuid: str | None = None,
 ) -> list[dict]:
     """Search for relevant books (direct call, no ToolRuntime).
 
@@ -364,6 +386,7 @@ def search_books_direct(
         query: Search query text
         trace_id: Trace ID for logging
         max_results: Maximum number of results to return
+        customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
         List of book results as dictionaries
@@ -376,6 +399,7 @@ def search_books_direct(
         trace_id=trace_id,
         query_length=len(query),
         num_results=num_results,
+        customer_uuid=customer_uuid,
     )
 
     results = _search_vector_index(
@@ -384,6 +408,7 @@ def search_books_direct(
         query_text=query,
         num_results=num_results,
         product_type="book",
+        customer_uuid=customer_uuid,
     )
 
     # Convert to dict
@@ -427,6 +452,7 @@ def search_articles_direct(
     query: str,
     trace_id: str,
     max_results: int = 10,
+    customer_uuid: str | None = None,
 ) -> list[dict]:
     """Search for relevant articles (direct call, no ToolRuntime).
 
@@ -436,6 +462,7 @@ def search_articles_direct(
         query: Search query text
         trace_id: Trace ID for logging
         max_results: Maximum number of results to return
+        customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
         List of article results as dictionaries
@@ -448,6 +475,7 @@ def search_articles_direct(
         trace_id=trace_id,
         query_length=len(query),
         num_results=num_results,
+        customer_uuid=customer_uuid,
     )
 
     results = _search_vector_index(
@@ -456,6 +484,7 @@ def search_articles_direct(
         query_text=query,
         num_results=num_results,
         product_type="article",
+        customer_uuid=customer_uuid,
     )
 
     # Convert to dict

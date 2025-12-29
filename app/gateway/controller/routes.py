@@ -69,6 +69,7 @@ async def recommend_products_endpoint(
         question_length=len(body.question),
         k=body.k,
         product_types=body.product_types,
+        customer_uuid=body.customer_uuid,
     )
 
     start_time = time.time()
@@ -81,7 +82,7 @@ async def recommend_products_endpoint(
             k=body.k,
             trace_id=trace_id,
             verticals=body.product_types,  # Map product_types to verticals
-            customer_uuid=None,  # TODO: Extract from auth token
+            customer_uuid=body.customer_uuid,  # From request body
         )
 
         # Transform grouped results to flat list for API compatibility
