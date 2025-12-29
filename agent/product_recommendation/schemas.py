@@ -1,11 +1,17 @@
 """Agent-specific schemas for state management and responses.
 
 Follows guideline: "Make state schema explicit early."
-Uses dataclasses (compatible with Pydantic) for type safety.
+
+Contains:
+- LangGraph State (TypedDict for workflow state)
+- Agent DTOs (dataclasses for legacy agent compatibility)
+- Database DTOs (Pydantic for vector search results)
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TypedDict, Literal, NotRequired
+from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 @dataclass
@@ -52,3 +58,104 @@ class AgentResponse:
     products: list[ProductResult]
     reasoning: str
     total_searched: int
+
+
+# =============================================================================
+# LangGraph State Schema (for future LangGraph workflow)
+# =============================================================================
+
+class AgentState(TypedDict):
+    """LangGraph workflow state.
+    
+    This state is passed between nodes in the LangGraph workflow.
+    Follows the architecture: user controls which verticals to search.
+    
+    Flow:
+        Input → Intent Analysis → Parallel Search (all requested verticals) → Compose Response
+    """
+    # Input (from API request)
+    article: str
+    question: str
+    k: int  # Top K products per vertical
+    verticals: list[Literal["activities", "books", "articles"]]  # User-specified
+    trace_id: str
+    customer_uuid: NotRequired[str | None]  # For multi-tenant filtering
+    
+    # Intent Analysis Output (from LLM)
+    intent: NotRequired[str | None]
+    
+    # Search Results (full objects, no hydration needed)
+    # Each vertical stores complete product data
+    activities: NotRequired[list[dict]]
+    books: NotRequired[list[dict]]
+    articles: NotRequired[list[dict]]
+    
+    # Status Tracking
+    status: NotRequired[Literal["complete", "partial"]]
+    errors: NotRequired[dict[str, str]]  # {vertical: error_message}
+    
+    # Final Output (from compose node)
+    grouped_results: NotRequired[dict[str, list[dict]]]  # {vertical: products}
+    total_products: NotRequired[int]
+
+
+# =============================================================================
+# Database DTOs (Pydantic models matching vector index schemas)
+# =============================================================================
+
+class ActivityDTO(BaseModel):
+    """Activity result from vector search (matches content_activity_gold_index)."""
+    
+    activity_id: str | None = None
+    customer_uuid: str | None = None
+    content_id: str
+    title: str
+    description: str | None = None
+    organizer: str | None = None
+    category: str | None = None
+    location_name: str | None = None
+    location_address: str | None = None
+    cover_image_urls: list[str] = Field(default_factory=list)
+    permalink_url: str | None = None
+    start_time: str | None = None  # datetime as string from index
+    end_time: str | None = None
+    summary: str | None = None
+    relevance_score: float = 0.0
+
+
+class BookDTO(BaseModel):
+    """Book result from vector search (matches content_book_gold_index)."""
+    
+    book_id: str | None = None
+    customer_uuid: str | None = None
+    content_id: str
+    title_main: str
+    title_subtitle: str | None = None
+    title_original: str | None = None
+    description: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    authors: list[str] = Field(default_factory=list)
+    prices: list[str] = Field(default_factory=list)  # JSON strings
+    cover_image_url: str | None = None
+    permalink_url: str | None = None
+    summary: str | None = None
+    relevance_score: float = 0.0
+
+
+class ArticleDTO(BaseModel):
+    """Article result from vector search (matches content_article_gold_index)."""
+    
+    article_id: str | None = None
+    customer_uuid: str | None = None
+    content_id: str
+    title: str
+    content: str | None = None  # Full article body text
+    authors: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    thumbnail_url: str | None = None
+    main_image_url: str | None = None
+    permalink_url: str | None = None
+    publish_time: str | None = None
+    summary: str | None = None
+    relevance_score: float = 0.0

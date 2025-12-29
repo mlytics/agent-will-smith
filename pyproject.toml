@@ -12,7 +12,7 @@ dependencies = [
     
     # LangChain & Databricks
     "langchain>=1.1.0",
-    # "langgraph>=1.0.4",  # Commented out - will be needed for future migration
+    "langgraph>=0.2.45",
     "databricks-langchain>=0.11.0",
     "databricks-sdk>=0.73.0",
     "databricks-vectorsearch>=0.40",
