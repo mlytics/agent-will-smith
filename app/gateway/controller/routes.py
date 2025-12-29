@@ -15,6 +15,7 @@ from app.gateway.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,
+    VerticalResults,
 )
 from agent import recommend_products
 
@@ -85,37 +86,55 @@ async def recommend_products_endpoint(
             customer_uuid=body.customer_uuid,  # From request body
         )
 
-        # Transform grouped results to flat list for API compatibility
-        products = []
+        # Transform grouped results to API response format
         grouped_results = agent_response.get("grouped_results", {})
+        verticals_searched = body.product_types or ["activities", "books", "articles"]
         
-        for vertical, vertical_products in grouped_results.items():
-            for product_dict in vertical_products:
-                products.append(
-                    ProductRecommendation(
-                        product_id=product_dict["product_id"],
-                        product_type=product_dict["product_type"],
-                        title=product_dict["title"],
-                        description=product_dict.get("description"),
-                        relevance_score=product_dict["relevance_score"],
-                        reasoning=agent_response.get("intent", ""),  # Use intent as reasoning
-                        metadata=product_dict.get("metadata", {}),
-                    )
+        results_by_vertical = []
+        for vertical in verticals_searched:
+            vertical_products = grouped_results.get(vertical, [])
+            error = agent_response.get("errors", {}).get(vertical)
+            
+            # Convert each product dict to ProductRecommendation
+            products = [
+                ProductRecommendation(
+                    product_id=p["product_id"],
+                    product_type=p["product_type"],
+                    title=p["title"],
+                    description=p.get("description"),
+                    relevance_score=p["relevance_score"],
+                    reasoning=agent_response.get("intent", ""),  # Use intent as reasoning
+                    metadata=p.get("metadata", {}),
                 )
+                for p in vertical_products
+            ]
+            
+            results_by_vertical.append(
+                VerticalResults(
+                    vertical=vertical,
+                    products=products,
+                    count=len(products),
+                    error=error,
+                )
+            )
 
         processing_time_ms = (time.time() - start_time) * 1000
 
         logger.info(
             "recommend_products_success",
             trace_id=trace_id,
-            products_count=len(products),
-            total_by_vertical=agent_response.get("total_products", 0),
+            total_products=agent_response.get("total_products", 0),
             status=agent_response.get("status", "complete"),
+            verticals_searched=verticals_searched,
             processing_time_ms=round(processing_time_ms, 2),
         )
 
         return RecommendProductsResponse(
-            products=products,
+            results_by_vertical=results_by_vertical,
+            total_products=agent_response.get("total_products", 0),
+            reasoning=agent_response.get("intent", "No intent provided"),
+            status=agent_response.get("status", "complete"),
+            verticals_searched=verticals_searched,
             trace_id=trace_id,
             processing_time_ms=round(processing_time_ms, 2),
         )

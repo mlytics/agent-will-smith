@@ -62,22 +62,31 @@ class ProductRecommendation(BaseModel):
     )
 
 
-class RecommendProductsResponse(BaseModel):
-    """Response schema for product recommendation endpoint."""
-
+class VerticalResults(BaseModel):
+    """Results for a single vertical."""
+    
+    vertical: str = Field(..., description="Vertical name (activities, books, or articles)")
     products: list[ProductRecommendation] = Field(
-        ..., description="List of recommended products"
+        ..., description="Products for this vertical (top K)"
     )
+    count: int = Field(..., description="Number of products in this vertical")
+    error: str | None = Field(None, description="Error message if vertical search failed")
+
+
+class RecommendProductsResponse(BaseModel):
+    """Response schema for product recommendation endpoint (grouped by vertical)."""
+
+    results_by_vertical: list[VerticalResults] = Field(
+        ..., description="Results grouped by vertical (activities, books, articles)"
+    )
+    total_products: int = Field(..., description="Total number of products across all verticals")
+    reasoning: str = Field(..., description="Agent's reasoning/intent analysis")
+    status: Literal["complete", "partial"] = Field(
+        ..., description="Status: 'complete' if all verticals succeeded, 'partial' if some failed"
+    )
+    verticals_searched: list[str] = Field(..., description="List of verticals that were searched")
     trace_id: str = Field(..., description="Trace ID for request tracking and debugging")
     processing_time_ms: float = Field(..., description="Processing time in milliseconds")
-
-    @field_validator("products")
-    @classmethod
-    def validate_products_count(cls, v: list[ProductRecommendation]) -> list[ProductRecommendation]:
-        """Ensure products list is within limits. Empty list is allowed (no relevant products found)."""
-        if len(v) > 10:
-            raise ValueError("Cannot recommend more than 10 products")
-        return v
 
 
 class HealthCheckResponse(BaseModel):
