@@ -23,7 +23,7 @@ class AgentContext:
     article: str
     question: str
     max_k: int
-    product_types: list[Literal["activities", "books"]] | None = None
+    product_types: list[Literal["activities", "books", "articles"]] | None = None
 
 
 @dataclass
@@ -34,7 +34,7 @@ class ProductResult:
     """
 
     product_id: str
-    product_type: Literal["activity", "book"]
+    product_type: Literal["activity", "book", "article"]
     title: str
     description: str | None
     relevance_score: float

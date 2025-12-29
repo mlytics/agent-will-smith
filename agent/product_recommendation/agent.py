@@ -16,7 +16,7 @@ import structlog
 from core.config import config
 from agent.product_recommendation.config import agent_config
 from agent.product_recommendation.schemas import AgentContext, AgentResponse, ProductResult
-from agent.product_recommendation.infra.vector_search import search_activities, search_books
+from agent.product_recommendation.infra.vector_search import search_activities, search_books, search_articles
 from agent.product_recommendation.infra.prompts import load_prompt_from_registry
 
 logger = structlog.get_logger(__name__)
@@ -75,6 +75,9 @@ def recommend_products(
     if product_types is None or "books" in product_types:
         tools.append(search_books)
         logger.info("tool_added", tool="search_books", trace_id=trace_id)
+    if product_types is None or "articles" in product_types:
+        tools.append(search_articles)
+        logger.info("tool_added", tool="search_articles", trace_id=trace_id)
     
     if not tools:
         logger.warning("no_tools_available", product_types=product_types, trace_id=trace_id)
@@ -115,7 +118,7 @@ def recommend_products(
 Question: {question}
 
 Please analyze this article and question, then recommend the top {k} most relevant products.
-Use the available search tools (search_activities and/or search_books) to find relevant products.
+Use the available search tools (search_activities, search_books, and/or search_articles) to find relevant products.
 Consider the article's main topics and how they relate to the question.
 
 Return your recommendations with clear reasoning."""

@@ -19,12 +19,12 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
-def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book"]) -> ProductResult:
+def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book", "article"]) -> ProductResult:
     """Parse a single result row from vector search into ProductResult.
     
     Args:
         result_dict: Dictionary with result data
-        product_type: Type of product (activity or book)
+        product_type: Type of product (activity, book, or article)
         
     Returns:
         ProductResult object
@@ -41,8 +41,9 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
             "start_time": result_dict.get("start_time"),
             "end_time": result_dict.get("end_time"),
             "permalink_url": result_dict.get("permalink_url"),
+            "cover_image_urls": result_dict.get("cover_image_urls", []),
         }
-    else:  # book
+    elif product_type == "book":
         product_id = result_dict.get("content_id", "unknown")
         title = result_dict.get("title_main", "Untitled Book")
         description = result_dict.get("description", None)
@@ -51,6 +52,21 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
             "authors": result_dict.get("authors", []),
             "categories": result_dict.get("categories", []),
             "permalink_url": result_dict.get("permalink_url"),
+            "cover_image_url": result_dict.get("cover_image_url"),
+            "prices": result_dict.get("prices", []),
+        }
+    else:  # article
+        product_id = result_dict.get("content_id", "unknown")
+        title = result_dict.get("title", "Untitled Article")
+        description = result_dict.get("content", None)  # Full content as description
+        metadata = {
+            "authors": result_dict.get("authors", []),
+            "keywords": result_dict.get("keywords", []),
+            "categories": result_dict.get("categories", []),
+            "permalink_url": result_dict.get("permalink_url"),
+            "thumbnail_url": result_dict.get("thumbnail_url"),
+            "main_image_url": result_dict.get("main_image_url"),
+            "publish_time": result_dict.get("publish_time"),
         }
     
     # Get relevance score
@@ -85,7 +101,7 @@ def _search_vector_index(
     index_name: str,
     query_text: str,
     num_results: int,
-    product_type: Literal["activity", "book"],
+    product_type: Literal["activity", "book", "article"],
 ) -> list[ProductResult]:
     """Execute vector search query against a specific index.
 
@@ -128,8 +144,9 @@ def _search_vector_index(
                 "start_time",
                 "end_time",
                 "permalink_url",
+                "cover_image_urls",
             ]
-        else:  # book
+        elif product_type == "book":
             columns = [
                 "content_id",  # ⭐ PRIMARY KEY - REQUIRED
                 "title_main",
@@ -138,6 +155,21 @@ def _search_vector_index(
                 "authors",
                 "categories",
                 "permalink_url",
+                "cover_image_url",
+                "prices",
+            ]
+        else:  # article
+            columns = [
+                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
+                "title",
+                "content",
+                "authors",
+                "keywords",
+                "categories",
+                "permalink_url",
+                "thumbnail_url",
+                "main_image_url",
+                "publish_time",
             ]
 
         # Execute similarity search
@@ -385,6 +417,78 @@ def search_books(
     """
     context = runtime.context
     return search_books_direct(
+        query=query,
+        trace_id=context.trace_id,
+        max_results=context.max_k
+    )
+
+
+def search_articles_direct(
+    query: str,
+    trace_id: str,
+    max_results: int = 10,
+) -> list[dict]:
+    """Search for relevant articles (direct call, no ToolRuntime).
+
+    This is the direct function for calling outside of agent frameworks.
+
+    Args:
+        query: Search query text
+        trace_id: Trace ID for logging
+        max_results: Maximum number of results to return
+
+    Returns:
+        List of article results as dictionaries
+    """
+    client = _create_vector_search_client()
+    num_results = min(max_results, agent_config.max_k_products)
+
+    logger.info(
+        "searching_articles",
+        trace_id=trace_id,
+        query_length=len(query),
+        num_results=num_results,
+    )
+
+    results = _search_vector_index(
+        client=client,
+        index_name=agent_config.articles_index,
+        query_text=query,
+        num_results=num_results,
+        product_type="article",
+    )
+
+    # Convert to dict
+    return [
+        {
+            "product_id": r.product_id,
+            "product_type": r.product_type,
+            "title": r.title,
+            "description": r.description,
+            "relevance_score": r.relevance_score,
+            "metadata": r.metadata,
+        }
+        for r in results
+    ]
+
+
+@tool
+def search_articles(
+    query: str, runtime: ToolRuntime[AgentContext]
+) -> list[dict]:
+    """Search for relevant articles (for agent framework use).
+
+    This tool performs semantic search in the articles vector index.
+
+    Args:
+        query: Search query text
+        runtime: Tool runtime with agent context
+
+    Returns:
+        List of article results as dictionaries
+    """
+    context = runtime.context
+    return search_articles_direct(
         query=query,
         trace_id=context.trace_id,
         max_results=context.max_k

@@ -30,10 +30,10 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[Literal["activities", "books"]] | None = Field(
+    product_types: list[Literal["activities", "books", "articles"]] | None = Field(
         default=None,
-        description="Filter by product types. If None, search both activities and books.",
-        examples=[["activities", "books"]],
+        description="Filter by product types. If None, search all verticals (activities, books, articles).",
+        examples=[["activities", "books", "articles"]],
     )
 
 
@@ -41,8 +41,8 @@ class ProductRecommendation(BaseModel):
     """Individual product recommendation with metadata."""
 
     product_id: str = Field(..., description="Unique product identifier")
-    product_type: Literal["activity", "book"] = Field(
-        ..., description="Type of product (activity or book)"
+    product_type: Literal["activity", "book", "article"] = Field(
+        ..., description="Type of product (activity, book, or article)"
     )
     title: str = Field(..., description="Product title")
     description: str | None = Field(None, description="Product description")
