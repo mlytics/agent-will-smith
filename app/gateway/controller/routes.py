@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 import structlog
 
 from app.middleware.auth import verify_api_key
+from core.exceptions import map_exception_to_http_status, AgentException
 from app.gateway.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
@@ -115,17 +116,21 @@ async def recommend_products_endpoint(
     except Exception as e:
         processing_time_ms = (time.time() - start_time) * 1000
 
+        # Map exception to appropriate HTTP status code
+        status_code, error_message = map_exception_to_http_status(e)
+
         logger.error(
             "recommend_products_error",
             trace_id=trace_id,
             error=str(e),
             error_type=type(e).__name__,
+            status_code=status_code,
             processing_time_ms=round(processing_time_ms, 2),
             exc_info=True,
         )
 
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate recommendations: {str(e)}",
+            status_code=status_code,
+            detail=error_message if isinstance(e, AgentException) else f"Failed to generate recommendations: {str(e)}",
         )
 

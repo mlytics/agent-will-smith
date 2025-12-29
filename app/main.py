@@ -13,6 +13,7 @@ import structlog
 
 from core.config import config
 from core.logger import configure_logging
+from core.exceptions import map_exception_to_http_status
 from app.middleware.auth import verify_api_key
 from app.middleware.observability import ObservabilityMiddleware
 from app.gateway.dto.schemas import HealthCheckResponse
@@ -132,30 +133,37 @@ app.include_router(api_router, prefix="/api/v1", dependencies=[])
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors.
+    
+    Maps all exceptions to appropriate HTTP status codes using the
+    exception hierarchy defined in core.exceptions.
 
     Args:
         request: HTTP request
         exc: Unhandled exception
 
     Returns:
-        JSON error response with trace ID
+        JSON error response with trace ID and appropriate status code
     """
     trace_id = getattr(request.state, "trace_id", None)
+    
+    # Map exception to HTTP status
+    status_code, error_message = map_exception_to_http_status(exc)
 
     logger.error(
         "unhandled_exception",
         trace_id=trace_id,
         error=str(exc),
         error_type=type(exc).__name__,
+        status_code=status_code,
         path=request.url.path,
         exc_info=True,
     )
 
     return JSONResponse(
-        status_code=500,
+        status_code=status_code,
         content={
-            "error": "Internal server error",
-            "detail": str(exc) if config.environment == "development" else None,
+            "error": error_message,
+            "detail": str(exc) if config.fastapi.environment == "development" else None,
             "trace_id": trace_id,
         },
     )
