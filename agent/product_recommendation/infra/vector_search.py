@@ -199,8 +199,14 @@ def _search_vector_index(
         products = []
         
         if not isinstance(results, dict):
-            logger.error("unexpected_response_type", response_type=type(results).__name__)
-            return []
+            logger.error("unexpected_response_type", 
+                        response_type=type(results).__name__,
+                        index_name=index_name,
+                        exc_info=True)
+            from core.exceptions import VectorSearchError
+            raise VectorSearchError(
+                f"Unexpected response type from vector search: {type(results).__name__}"
+            )
         
         # Get result data and manifest
         result_data = results.get("result", {})

@@ -97,7 +97,8 @@ Provide a concise intent summary (2-3 sentences max)."""
     except TimeoutError as e:
         logger.error("intent_analysis_timeout", 
                     trace_id=trace_id, 
-                    error=str(e))
+                    error=str(e),
+                    exc_info=True)  # Show line number
         raise LLMServiceTimeout(f"Intent analysis timed out: {str(e)}") from e
         
     except Exception as e:

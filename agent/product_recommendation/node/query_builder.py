@@ -52,21 +52,3 @@ def build_search_query(article: str, question: str, intent: str | None = None) -
     
     return query
 
-
-def build_search_query_simple(article: str, question: str, intent: str | None = None) -> str:
-    """Build simple search query (alternative strategy).
-    
-    Even simpler approach - just combine key elements.
-    
-    Args:
-        article: Original article text
-        question: User's question
-        intent: Optional intent from LLM analysis
-        
-    Returns:
-        Simple search query string
-    """
-    if intent:
-        return f"{intent} {question}"
-    return question
-
