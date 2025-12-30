@@ -47,36 +47,26 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
             f"Must start with 'prompts:/' (e.g., prompts:/catalog.schema.name/version)"
         )
     
-    try:
-        logger.info("loading_prompt_from_mlflow", prompt_path=prompt_path)
-        
-        # Use MLflow's dedicated prompt loading API
-        # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
-        prompt = mlflow.genai.load_prompt(prompt_path)
-        
-        # Use .format() method to get the prompt text
-        # This is the standard way to extract text from MLflow prompt objects
-        prompt_text = prompt.format()
-        
-        logger.info("prompt_loaded_successfully",
-                   prompt_path=prompt_path,
-                   prompt_length=len(prompt_text))
-        
-        # Validate with Pydantic
-        prompt_content = PromptContent(
-            text=prompt_text,
-            source=prompt_path
-        )
-        
-        return prompt_content
-        
-    except Exception as e:
-        logger.error(
-            "prompt_load_failed",
-            prompt_path=prompt_path,
-            error=str(e),
-            error_type=type(e).__name__,
-            exc_info=True,
-        )
-        raise  # Re-raise - no silent failures!
+    logger.info("loading_prompt_from_mlflow", prompt_path=prompt_path)
+    
+    # Use MLflow's dedicated prompt loading API
+    # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
+    # Let MLflow exceptions bubble up to API layer (no try-catch)
+    prompt = mlflow.genai.load_prompt(prompt_path)
+    
+    # Use .format() method to get the prompt text
+    # This is the standard way to extract text from MLflow prompt objects
+    prompt_text = prompt.format()
+    
+    logger.info("prompt_loaded_successfully",
+               prompt_path=prompt_path,
+               prompt_length=len(prompt_text))
+    
+    # Validate with Pydantic
+    prompt_content = PromptContent(
+        text=prompt_text,
+        source=prompt_path
+    )
+    
+    return prompt_content
 

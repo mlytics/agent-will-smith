@@ -88,29 +88,30 @@ async def search_vertical(
             error=None
         )
         
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as e:
+        # Timeout is expected behavior, log and raise with context
         logger.warning("vertical_search_timeout",
                       vertical=vertical,
                       trace_id=trace_id,
-                      timeout=timeout)
-        return VerticalSearchResult(
-            vertical=vertical,
-            products=[],
-            error=f"Search timeout after {timeout}s"
-        )
+                      timeout=timeout,
+                      exc_info=True)
+        from core.exceptions import VectorSearchTimeout
+        raise VectorSearchTimeout(
+            f"Search timeout for {vertical} after {timeout}s (trace: {trace_id})"
+        ) from e
         
     except Exception as e:
+        # Unexpected error - fail fast with full context
         logger.error("vertical_search_error",
                     vertical=vertical,
                     trace_id=trace_id,
                     error=str(e),
                     error_type=type(e).__name__,
-                    exc_info=True)
-        return VerticalSearchResult(
-            vertical=vertical,
-            products=[],
-            error=f"Search error: {str(e)}"
-        )
+                    exc_info=True)  # Shows line number
+        from core.exceptions import VectorSearchError
+        raise VectorSearchError(
+            f"Search failed for {vertical} (trace: {trace_id}): {str(e)}"
+        ) from e  # Preserves stack trace with line numbers
 
 
 async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
@@ -172,13 +173,14 @@ async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
     ]
     
     # Execute all searches in parallel
+    # Use return_exceptions=True to catch failures without stopping other searches
     logger.info("launching_parallel_searches",
                trace_id=trace_id,
                num_verticals=len(tasks))
     
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    # Aggregate results (results is list[VerticalSearchResult])
+    # Aggregate results - handle both successful results and exceptions
     updates = {
         "activities": [],
         "books": [],
@@ -186,13 +188,27 @@ async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
         "errors": {},
     }
     
-    for result in results:
-        updates[result.vertical] = result.products
-        if result.error:
-            updates["errors"][result.vertical] = result.error
+    for i, result in enumerate(results):
+        vertical = verticals[i]
+        
+        if isinstance(result, Exception):
+            # Search failed - log error with full context
+            logger.error("vertical_search_failed",
+                        vertical=vertical,
+                        trace_id=trace_id,
+                        error=str(result),
+                        error_type=type(result).__name__,
+                        exc_info=result)  # Shows line number where it failed
+            updates["errors"][vertical] = f"{type(result).__name__}: {str(result)}"
+            updates[vertical] = []
+        else:
+            # Search succeeded
+            updates[vertical] = result.products
+            if result.error:
+                updates["errors"][vertical] = result.error
             logger.warning("vertical_search_had_error",
-                          vertical=result.vertical,
-                          error=result.error,
+                              vertical=result.vertical,
+                              error=result.error,
                           trace_id=trace_id)
     
     # Determine overall status

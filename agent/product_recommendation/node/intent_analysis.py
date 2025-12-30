@@ -94,10 +94,6 @@ Provide a concise intent summary (2-3 sentences max)."""
         # Return validated Pydantic model directly (type-safe)
         return IntentAnalysisOutput(intent=intent)
         
-    except IntentAnalysisError:
-        # Re-raise our custom exception
-        raise
-        
     except TimeoutError as e:
         logger.error("intent_analysis_timeout", 
                     trace_id=trace_id, 

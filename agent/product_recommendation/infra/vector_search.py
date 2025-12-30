@@ -283,16 +283,22 @@ def _search_vector_index(
         return products
 
     except Exception as e:
-        # Explicit error handling (guideline: "Have an explicit tool error strategy")
+        # Fail fast - raise exception with context (no silent failures)
         logger.error(
             "vector_search_failed",
             index_name=index_name,
             product_type=product_type,
+            customer_uuid=customer_uuid,
             error=str(e),
-            exc_info=True,
+            error_type=type(e).__name__,
+            exc_info=True,  # Includes line numbers in logs
         )
-        # Return empty list rather than raising - agent can handle missing results
-        return []
+        # Raise with context - preserves stack trace showing exact line that failed
+        from core.exceptions import VectorSearchError
+        raise VectorSearchError(
+            f"Vector search failed for {product_type} in {index_name} "
+            f"(customer: {customer_uuid}): {str(e)}"
+        ) from e  # Preserves original exception + line number
 
 
 def search_activities_direct(

@@ -80,39 +80,30 @@ async def recommend_products(
                trace_id=trace_id,
                workflow_type="product_recommendation")
     
-    try:
-        # Execute workflow (returns dict, but validated by Pydantic during workflow)
-        final_state_dict = await workflow.ainvoke(initial_state)
-        
-        # Parse back to Pydantic for validation and type-safe access
-        final_state = AgentState(**final_state_dict)
-        
-        logger.info("workflow_completed",
-                   trace_id=trace_id,
-                   total_products=final_state.total_products,
-                   status=final_state.status)
-        
-        # Convert to AgentOutput
-        agent_output = AgentOutput(
-            grouped_results=final_state.grouped_results,
-            total_products=final_state.total_products,
-            status=final_state.status,
-            errors=final_state.errors,
-            intent=final_state.intent or "No intent provided",
-        )
-        
-        logger.info("agent_completed",
-                   trace_id=trace_id,
-                   total_products=agent_output.total_products,
-                   status=agent_output.status,
-                   has_errors=bool(agent_output.errors))
-        
-        return agent_output  # Return Pydantic model directly
-        
-    except Exception as e:
-        logger.error("agent_execution_failed",
-                    trace_id=trace_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    exc_info=True)
-        raise
+    # Execute workflow - let exceptions bubble to API layer (no try-catch)
+    final_state_dict = await workflow.ainvoke(initial_state)
+    
+    # Parse back to Pydantic for validation and type-safe access
+    final_state = AgentState(**final_state_dict)
+    
+    logger.info("workflow_completed",
+               trace_id=trace_id,
+               total_products=final_state.total_products,
+               status=final_state.status)
+    
+    # Convert to AgentOutput
+    agent_output = AgentOutput(
+        grouped_results=final_state.grouped_results,
+        total_products=final_state.total_products,
+        status=final_state.status,
+        errors=final_state.errors,
+        intent=final_state.intent or "No intent provided",
+    )
+    
+    logger.info("agent_completed",
+               trace_id=trace_id,
+               total_products=agent_output.total_products,
+               status=agent_output.status,
+               has_errors=bool(agent_output.errors))
+    
+    return agent_output  # Return Pydantic model directly
