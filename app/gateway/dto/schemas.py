@@ -65,7 +65,7 @@ class ProductRecommendation(BaseModel):
 
 class VerticalResults(BaseModel):
     """Results for a single vertical."""
-    
+
     vertical: str = Field(..., description="Vertical name (activities, books, or articles)")
     products: list[ProductRecommendation] = Field(
         ..., description="Products for this vertical (top K)"

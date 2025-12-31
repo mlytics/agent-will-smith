@@ -8,16 +8,19 @@ Uses pooled LLM client for performance.
 """
 
 import structlog
+from databricks_langchain import ChatDatabricks
 
 from agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
 from agent.product_recommendation.infra.prompts import load_prompt_from_registry
-from agent.product_recommendation.infra.llm_client import get_llm_client
 from core.exceptions import IntentAnalysisError, LLMServiceError, LLMServiceTimeout
 
 logger = structlog.get_logger(__name__)
 
 
-def intent_analysis_node(state: AgentState) -> IntentAnalysisOutput:
+def intent_analysis_node(
+    state: AgentState,
+    llm_client: ChatDatabricks,
+) -> IntentAnalysisOutput:
     """Analyze intent with single LLM call.
     
     This is the ONLY LLM call in the workflow. It analyzes the article and question
@@ -46,10 +49,9 @@ def intent_analysis_node(state: AgentState) -> IntentAnalysisOutput:
                     prompt_length=len(system_prompt),
                     prompt_source=prompt_content.source)
         
-        # Get pooled LLM client (reused across requests)
-        llm = get_llm_client()
-        logger.debug("llm_client_retrieved", 
-                    trace_id=trace_id)
+        # Use injected LLM client (always provided via functools.partial)
+        llm = llm_client
+        logger.debug("llm_client_injected", trace_id=trace_id)
         
         # Construct user message
         # Truncate article to avoid token limits (keep first 1000 chars)

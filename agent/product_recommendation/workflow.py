@@ -1,11 +1,10 @@
-"""LangGraph workflow for product recommendation.
+"""Product recommendation workflow composition.
 
-Connects all nodes into an executable workflow graph.
-Architecture: Linear flow, no conditionals (user controls verticals).
-Thread-safe workflow singleton.
+Defines and compiles the LangGraph workflow for product recommendations.
+This is where all nodes are wired together with dependencies injected.
 """
 
-import threading
+from functools import lru_cache, partial
 from langgraph.graph import StateGraph, START, END
 import structlog
 
@@ -15,74 +14,61 @@ from agent.product_recommendation.node import (
     parallel_search_node,
     compose_response_node,
 )
+from agent.product_recommendation.infra.llm_client import get_llm_client
+from agent.product_recommendation.infra.vector_search import get_vector_search_client
 
 logger = structlog.get_logger(__name__)
 
 
-def create_recommendation_workflow() -> StateGraph:
-    """Create the product recommendation LangGraph workflow.
+@lru_cache()
+def get_workflow() -> StateGraph:
+    """Get compiled workflow with dependencies injected.
     
-    Flow:
-        START → intent_analysis → parallel_search → compose_response → END
+    Creates workflow with all dependencies baked in using functools.partial.
+    This allows LangGraph nodes to receive dependencies without global imports.
     
-    Architecture:
-    - Linear flow (no conditionals)
-    - User controls which verticals to search
-    - Single LLM call (intent analysis)
-    - Parallel vector search across verticals
-    - Deterministic response composition
+    Thread-safe singleton using @lru_cache.
     
     Returns:
-        Compiled StateGraph ready for execution
+        Compiled StateGraph with dependencies injected
     """
-    logger.info("creating_workflow")
+    logger.info("building_workflow_with_dependencies")
     
-    # Define graph with AgentState
+    # Get pooled dependencies (從小組到大)
+    vector_client = get_vector_search_client()
+    llm = get_llm_client()
+    
+    # Inject dependencies into nodes using functools.partial
+    intent_node_with_deps = partial(
+        intent_analysis_node,
+        llm_client=llm
+    )
+    
+    search_node_with_deps = partial(
+        parallel_search_node,
+        vector_client=vector_client
+    )
+    
+    # compose_response_node is pure function (no external dependencies)
+    
+    # Build workflow with injected nodes
     workflow = StateGraph(AgentState)
-    
-    # Add nodes
-    workflow.add_node("intent_analysis", intent_analysis_node)
-    workflow.add_node("parallel_search", parallel_search_node)
+    workflow.add_node("intent_analysis", intent_node_with_deps)
+    workflow.add_node("parallel_search", search_node_with_deps)
     workflow.add_node("compose_response", compose_response_node)
     
-    # Connect nodes (linear flow - no conditionals!)
+    # Connect nodes
     workflow.add_edge(START, "intent_analysis")
     workflow.add_edge("intent_analysis", "parallel_search")
     workflow.add_edge("parallel_search", "compose_response")
     workflow.add_edge("compose_response", END)
     
-    logger.info("workflow_created",
-               nodes=["intent_analysis", "parallel_search", "compose_response"])
+    logger.info("workflow_with_dependencies_built")
     
     return workflow.compile()
 
 
-# Singleton workflow instance - thread-safe
-_workflow: StateGraph | None = None
-_workflow_lock = threading.Lock()
-
-
-def get_workflow() -> StateGraph:
-    """Get compiled workflow (singleton pattern).
-    
-    Thread-safe singleton with double-checked locking.
-    Workflow is compiled once and reused across all requests.
-    
-    Returns:
-        Compiled workflow ready for execution
-    """
-    global _workflow
-    
-    # Fast path: return existing workflow without lock
-    if _workflow is not None:
-        return _workflow
-    
-    # Slow path: acquire lock and create workflow (thread-safe)
-    with _workflow_lock:
-        # Double-check: another thread might have created it while we waited
-        if _workflow is None:
-            logger.info("initializing_workflow_singleton")
-            _workflow = create_recommendation_workflow()
-        
-        return _workflow
+__all__ = [
+    "get_workflow",
+]
 

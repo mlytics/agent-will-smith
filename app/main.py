@@ -59,15 +59,14 @@ async def lifespan(app: FastAPI):
     # Initialize dependencies (從小組到大 - from small to big)
     logger.info("initializing_dependencies")
     
-    # 1. Vector search client (小 - small component)
-    from agent.product_recommendation.infra import (
-        get_vector_search_client,
-        get_llm_client,
-        load_prompt_from_registry,
-    )
+    # Import infrastructure and workflow from agent
+    from agent.product_recommendation.infra.vector_search import get_vector_search_client
+    from agent.product_recommendation.infra.llm_client import get_llm_client
     from agent.product_recommendation.workflow import get_workflow
+    from agent.product_recommendation.infra.prompts import load_prompt_from_registry
     from agent.product_recommendation.config import agent_config
     
+    # 1. Vector search client (小 - small component)
     vector_client = get_vector_search_client()
     logger.info("vector_search_client_pooled")
     
@@ -79,9 +78,9 @@ async def lifespan(app: FastAPI):
     prompt = load_prompt_from_registry(agent_config.prompt_name)
     logger.info("prompt_cached", prompt_length=len(prompt.text))
     
-    # 4. Workflow (大 - big component, composed of above)
+    # 4. Workflow (大 - big component, composed of above with DI)
     workflow = get_workflow()
-    logger.info("workflow_compiled")
+    logger.info("workflow_with_dependencies_ready")
 
     logger.info("application_ready",
                port=config.port,

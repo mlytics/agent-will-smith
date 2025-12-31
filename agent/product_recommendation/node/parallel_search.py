@@ -6,6 +6,7 @@ Architecture: Deterministic function-based tools, no LLM decision-making.
 
 import asyncio
 import structlog
+from databricks.vector_search.client import VectorSearchClient
 
 from agent.product_recommendation.constants import VERTICALS
 from agent.product_recommendation.schemas import AgentState, ParallelSearchOutput, VerticalSearchResult
@@ -114,11 +115,14 @@ async def search_vertical(
         ) from e  # Preserves stack trace with line numbers
 
 
-async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
+async def parallel_search_node(
+    state: AgentState,
+    vector_client: VectorSearchClient,
+) -> ParallelSearchOutput:
     """Execute vector searches for all requested verticals in parallel.
     
     This is a deterministic node - it searches exactly the verticals
-    specified by the user (state["verticals"]), not based on LLM decision.
+    specified by the user (state.verticals), not based on LLM decision.
     
     Architecture:
     - User controls which verticals to search (not LLM)
@@ -126,18 +130,23 @@ async def parallel_search_node(state: AgentState) -> ParallelSearchOutput:
     - Each vertical has 5s timeout
     - Partial results allowed (if some verticals succeed)
     - Errors tracked per vertical
+    - Dependencies injected (vector_client) or retrieved from pool
     
     Args:
         state: Current workflow state with verticals list
+        vector_client: Optional injected VectorSearchClient (DI)
         
     Returns:
-        dict with:
+        ParallelSearchOutput with:
         - activities: list[dict]
         - books: list[dict]
         - articles: list[dict]
         - errors: dict[str, str]
         - status: "complete" | "partial"
     """
+    # Use injected vector client (always provided via functools.partial)
+    logger.debug("vector_client_injected")
+    
     trace_id = state.trace_id
     verticals = state.verticals
     intent = state.intent or ""

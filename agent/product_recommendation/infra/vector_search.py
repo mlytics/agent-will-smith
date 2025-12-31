@@ -121,14 +121,6 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
     )
 
 
-def _create_vector_search_client() -> VectorSearchClient:
-    """
-    Returns:
-        Pooled VectorSearchClient instance
-    """
-    return get_vector_search_client()
-
-
 def _search_vector_index(
     client: VectorSearchClient,
     index_name: str,
@@ -213,7 +205,7 @@ def _search_vector_index(
         if customer_uuid:
             filters["customer_uuid"] = customer_uuid
             logger.debug("applying_customer_filter", customer_uuid=customer_uuid)
-        
+
         # Execute similarity search
         if filters:
             results = index.similarity_search(
@@ -360,7 +352,7 @@ def search_activities_direct(
     Returns:
         List of activity results as dictionaries
     """
-    client = _create_vector_search_client()
+    client = get_vector_search_client()
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(
@@ -403,7 +395,7 @@ def search_books_direct(
     Returns:
         List of book results as dictionaries
     """
-    client = _create_vector_search_client()
+    client = get_vector_search_client()
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(
@@ -446,7 +438,7 @@ def search_articles_direct(
     Returns:
         List of article results as dictionaries
     """
-    client = _create_vector_search_client()
+    client = get_vector_search_client()
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(

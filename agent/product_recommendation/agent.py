@@ -13,7 +13,7 @@ Flow:
 import mlflow
 import structlog
 
-from agent.product_recommendation.workflow import get_workflow
+from langgraph.graph import StateGraph
 from agent.product_recommendation.schemas import AgentState, AgentOutput
 
 logger = structlog.get_logger(__name__)
@@ -27,11 +27,15 @@ async def recommend_products(
     trace_id: str,
     verticals: list[str] | None = None,
     customer_uuid: str | None = None,
+    workflow: StateGraph | None = None,
 ) -> AgentOutput:
-    """Product recommendation agent (LangGraph implementation).
+    """    Product recommendation agent (LangGraph implementation).
     
     Analyzes article and question, searches requested verticals in parallel,
     and returns grouped product recommendations.
+    
+    Dependencies can be injected for testing or passed via FastAPI Depends().
+    If not provided, uses pooled singletons from startup.
     
     Args:
         article: Article text to analyze
@@ -40,6 +44,7 @@ async def recommend_products(
         trace_id: Trace ID for observability
         verticals: Which verticals to search (default: all 3)
         customer_uuid: Optional customer UUID for multi-tenant filtering
+        workflow: Optional injected workflow (DI)
         
     Returns:
         AgentOutput (Pydantic model) with:
@@ -56,15 +61,21 @@ async def recommend_products(
         verticals = ["activities", "books", "articles"]
     
     logger.info("agent_started",
-               trace_id=trace_id,
-               article_length=len(article),
-               question_length=len(question),
-               k=k,
-               verticals=verticals,
-               customer_uuid=customer_uuid)
+                trace_id=trace_id,
+                article_length=len(article),
+                question_length=len(question),
+                k=k,
+                verticals=verticals,
+                customer_uuid=customer_uuid)
     
-    # Get workflow
-    workflow = get_workflow()
+    # Use injected workflow (from FastAPI Depends or direct call)
+    # Note: Can be None for testing - falls back to agent workflow
+    if workflow is None:
+        from agent.product_recommendation.workflow import get_workflow
+        workflow = get_workflow()
+        logger.debug("workflow_from_agent_module", trace_id=trace_id)
+    else:
+        logger.debug("workflow_injected", trace_id=trace_id)
     
     # Initialize state (Pydantic model)
     initial_state = AgentState(
@@ -74,11 +85,11 @@ async def recommend_products(
         verticals=verticals,
         trace_id=trace_id,
         customer_uuid=customer_uuid,
-    )
+        )
     
     logger.info("workflow_invoking",
-               trace_id=trace_id,
-               workflow_type="product_recommendation")
+                trace_id=trace_id,
+                workflow_type="product_recommendation")
     
     # Execute workflow - let exceptions bubble to API layer (no try-catch)
     final_state_dict = await workflow.ainvoke(initial_state)
@@ -87,9 +98,9 @@ async def recommend_products(
     final_state = AgentState(**final_state_dict)
     
     logger.info("workflow_completed",
-               trace_id=trace_id,
-               total_products=final_state.total_products,
-               status=final_state.status)
+                trace_id=trace_id,
+                total_products=final_state.total_products,
+                status=final_state.status)
     
     # Convert to AgentOutput
     agent_output = AgentOutput(
@@ -101,9 +112,9 @@ async def recommend_products(
     )
     
     logger.info("agent_completed",
-               trace_id=trace_id,
-               total_products=agent_output.total_products,
-               status=agent_output.status,
-               has_errors=bool(agent_output.errors))
+                trace_id=trace_id,
+                total_products=agent_output.total_products,
+                status=agent_output.status,
+                has_errors=bool(agent_output.errors))
     
     return agent_output  # Return Pydantic model directly

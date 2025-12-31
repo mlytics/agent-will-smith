@@ -7,10 +7,12 @@ Each endpoint maps to a single agent function.
 import time
 from typing import Annotated
 from fastapi import APIRouter, Depends, Request, HTTPException
+from langgraph.graph import StateGraph
 import structlog
 
 from app.middleware.auth import verify_api_key
 from core.exceptions import map_exception_to_http_status, AgentException
+from agent.product_recommendation.workflow import get_workflow
 from app.gateway.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
@@ -47,6 +49,7 @@ async def recommend_products_endpoint(
     request: Request,
     body: RecommendProductsRequest,
     api_key: Annotated[str, Depends(verify_api_key)],
+    workflow: Annotated[StateGraph, Depends(get_workflow)],
 ) -> RecommendProductsResponse:
     """Recommend products endpoint - maps 1:1 to recommend_products agent.
 
@@ -77,6 +80,7 @@ async def recommend_products_endpoint(
 
     try:
         # Invoke agent (LangGraph workflow) - returns Pydantic AgentOutput
+        # Workflow injected by FastAPI Depends()
         agent_output = await recommend_products(
             article=body.article,
             question=body.question,
@@ -84,6 +88,7 @@ async def recommend_products_endpoint(
             trace_id=trace_id,
             verticals=body.product_types,  # Map product_types to verticals
             customer_uuid=body.customer_uuid,  # From request body
+            workflow=workflow,  # Injected dependency
         )
 
         # Transform grouped results to API response format
