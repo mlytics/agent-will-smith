@@ -1,14 +1,17 @@
-"""MLflow prompt loading utilities.
+"""MLflow prompt loading utilities with caching.
 
 Centralized prompt management from MLflow registry.
 Follows guideline: "Make configuration declarative."
 
 CRITICAL REQUIREMENT: All prompts must be loaded from Databricks MLflow,
 not hardcoded. This ensures proper versioning, governance, and tracking.
+
+Caching: Prompts are cached in memory after first load for performance.
 """
 
 import mlflow
 import structlog
+from functools import lru_cache
 from typing import Any
 
 from core.config import config
@@ -18,11 +21,15 @@ from agent.product_recommendation.schemas import PromptContent
 logger = structlog.get_logger(__name__)
 
 
+@lru_cache(maxsize=10)
 def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
-    """Load prompt from MLflow prompt registry (Unity Catalog).
+    """Load prompt from MLflow prompt registry with caching.
     
     This is the ONLY way prompts should be loaded. No hardcoded fallbacks
     for production use.
+    
+    Caching: Uses @lru_cache to cache prompts in memory after first load.
+    Subsequent calls return cached version (no MLflow API call).
     
     IMPORTANT: Prompt must be created in Databricks UI first using the
     "Create Prompt" feature in Unity Catalog.
@@ -30,10 +37,11 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
     Args:
         prompt_name: Prompt registry path (format: "prompts:/catalog.schema.name/version")
                     Must start with "prompts:/" (single slash)
-                    If None, uses config.prompt_name
+                    If None, uses agent_config.prompt_name
     
     Returns:
         PromptContent (Pydantic model with validated text)
+        Cached after first load for performance.
         
     Raises:
         Exception: If prompt cannot be loaded (by design - no silent failures)

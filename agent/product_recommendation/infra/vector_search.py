@@ -8,6 +8,7 @@ Follows guidelines:
 """
 
 from typing import Literal
+import threading
 from databricks.vector_search.client import VectorSearchClient
 
 from core.config import config
@@ -16,6 +17,45 @@ from agent.product_recommendation.schemas import ProductResult
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+# Global client pool (singleton pattern) - thread-safe
+_vector_search_client_pool: VectorSearchClient | None = None
+_vector_search_client_lock = threading.Lock()
+
+
+def get_vector_search_client() -> VectorSearchClient:
+    """Get or create vector search client singleton (connection pooling).
+    
+    Creates the client once and reuses it across all requests.
+    Thread-safe singleton pattern with double-checked locking.
+    
+    Returns:
+        Shared VectorSearchClient instance
+    """
+    global _vector_search_client_pool
+    
+    # Fast path: return existing client without lock (performance optimization)
+    if _vector_search_client_pool is not None:
+        return _vector_search_client_pool
+    
+    # Slow path: acquire lock and create client (thread-safe)
+    with _vector_search_client_lock:
+        # Double-check: another thread might have created it while we waited
+        if _vector_search_client_pool is None:
+            logger.info("creating_vector_search_client_pool",
+                       workspace_url=config.databricks.databricks_host)
+            
+            _vector_search_client_pool = VectorSearchClient(
+                workspace_url=config.databricks.databricks_host,
+                service_principal_client_id=config.databricks.databricks_client_id,
+                service_principal_client_secret=config.databricks.databricks_client_secret,
+                disable_notice=True
+            )
+            
+            logger.info("vector_search_client_pool_created")
+        
+        return _vector_search_client_pool
 
 
 def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book", "article"]) -> ProductResult:
@@ -82,17 +122,11 @@ def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book
 
 
 def _create_vector_search_client() -> VectorSearchClient:
-    """Create Databricks vector search client with OAuth authentication.
-
-    Returns:
-        Configured VectorSearchClient instance with service principal OAuth credentials.
     """
-    return VectorSearchClient(
-        workspace_url=config.databricks_host,
-        service_principal_client_id=config.databricks_client_id,
-        service_principal_client_secret=config.databricks_client_secret,
-        disable_notice=True
-    )
+    Returns:
+        Pooled VectorSearchClient instance
+    """
+    return get_vector_search_client()
 
 
 def _search_vector_index(

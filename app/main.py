@@ -38,6 +38,10 @@ def configure_mlflow():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup/shutdown events.
+    
+    Initializes dependencies at startup (從小組到大):
+    1. Vector search client (connection pooling)
+    2. More dependencies in future commits
 
     Args:
         app: FastAPI application instance
@@ -51,6 +55,33 @@ async def lifespan(app: FastAPI):
     )
 
     configure_mlflow()
+    
+    # Initialize dependencies (從小組到大 - from small to big)
+    logger.info("initializing_dependencies")
+    
+    # 1. Vector search client (小 - small component)
+    from agent.product_recommendation.infra import (
+        get_vector_search_client,
+        get_llm_client,
+        load_prompt_from_registry,
+    )
+    from agent.product_recommendation.workflow import get_workflow
+    from agent.product_recommendation.config import agent_config
+    
+    vector_client = get_vector_search_client()
+    logger.info("vector_search_client_pooled")
+    
+    # 2. LLM client (小 - small component)
+    llm_client = get_llm_client()
+    logger.info("llm_client_pooled")
+    
+    # 3. Prompt cache (小 - small component)
+    prompt = load_prompt_from_registry(agent_config.prompt_name)
+    logger.info("prompt_cached", prompt_length=len(prompt.text))
+    
+    # 4. Workflow (大 - big component, composed of above)
+    workflow = get_workflow()
+    logger.info("workflow_compiled")
 
     logger.info("application_ready",
                port=config.port,

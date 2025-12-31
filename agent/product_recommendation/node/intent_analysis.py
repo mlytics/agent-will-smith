@@ -4,15 +4,14 @@ This node performs the ONLY LLM call in the workflow to analyze user intent.
 The intent is used to enhance search query quality.
 
 Architecture: Single LLM call, no multi-round reasoning.
+Uses pooled LLM client for performance.
 """
 
-from databricks_langchain import ChatDatabricks
 import structlog
 
-from core.config import config
-from agent.product_recommendation.config import agent_config
 from agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
 from agent.product_recommendation.infra.prompts import load_prompt_from_registry
+from agent.product_recommendation.infra.llm_client import get_llm_client
 from core.exceptions import IntentAnalysisError, LLMServiceError, LLMServiceTimeout
 
 logger = structlog.get_logger(__name__)
@@ -47,14 +46,9 @@ def intent_analysis_node(state: AgentState) -> IntentAnalysisOutput:
                     prompt_length=len(system_prompt),
                     prompt_source=prompt_content.source)
         
-        # Initialize LLM
-        llm = ChatDatabricks(
-            endpoint=agent_config.llm_endpoint,
-            temperature=agent_config.llm_temperature,
-            max_tokens=300,  # Intent should be concise
-        )
-        logger.debug("llm_initialized", 
-                    endpoint=agent_config.llm_endpoint,
+        # Get pooled LLM client (reused across requests)
+        llm = get_llm_client()
+        logger.debug("llm_client_retrieved", 
                     trace_id=trace_id)
         
         # Construct user message

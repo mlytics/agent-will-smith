@@ -2,8 +2,10 @@
 
 Connects all nodes into an executable workflow graph.
 Architecture: Linear flow, no conditionals (user controls verticals).
+Thread-safe workflow singleton.
 """
 
+import threading
 from langgraph.graph import StateGraph, START, END
 import structlog
 
@@ -55,19 +57,32 @@ def create_recommendation_workflow() -> StateGraph:
     return workflow.compile()
 
 
-# Singleton workflow instance
-_workflow = None
+# Singleton workflow instance - thread-safe
+_workflow: StateGraph | None = None
+_workflow_lock = threading.Lock()
 
 
 def get_workflow() -> StateGraph:
     """Get compiled workflow (singleton pattern).
     
+    Thread-safe singleton with double-checked locking.
+    Workflow is compiled once and reused across all requests.
+    
     Returns:
         Compiled workflow ready for execution
     """
     global _workflow
-    if _workflow is None:
-        logger.info("initializing_workflow_singleton")
-        _workflow = create_recommendation_workflow()
-    return _workflow
+    
+    # Fast path: return existing workflow without lock
+    if _workflow is not None:
+        return _workflow
+    
+    # Slow path: acquire lock and create workflow (thread-safe)
+    with _workflow_lock:
+        # Double-check: another thread might have created it while we waited
+        if _workflow is None:
+            logger.info("initializing_workflow_singleton")
+            _workflow = create_recommendation_workflow()
+        
+        return _workflow
 
