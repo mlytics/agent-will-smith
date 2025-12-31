@@ -16,7 +16,7 @@ from core.logger import configure_logging
 from core.exceptions import map_exception_to_http_status
 from app.middleware.observability import ObservabilityMiddleware
 from app.gateway.dto.schemas import HealthCheckResponse
-from app.gateway.controller.routes import router as api_router
+from app.gateway.product_recommendation.routes import router as product_recommendation_router
 
 # Configure logging on application import
 configure_logging(config.log_level)
@@ -156,7 +156,7 @@ async def metrics(request: Request):
 
 
 # Include API routes (protected by auth)
-app.include_router(api_router, prefix="/api/v1", dependencies=[])
+app.include_router(product_recommendation_router, prefix="/api/v1", dependencies=[])
 
 
 @app.exception_handler(Exception)

@@ -13,7 +13,7 @@ import structlog
 from app.middleware.auth import verify_api_key
 from core.exceptions import map_exception_to_http_status, AgentException
 from agent.product_recommendation.workflow import get_workflow
-from app.gateway.dto.schemas import (
+from app.gateway.product_recommendation.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,
