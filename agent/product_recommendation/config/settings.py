@@ -21,23 +21,14 @@ class ProductRecommendationAgentConfig(BaseSettings):
     llm_endpoint: str = Field(
         default="databricks-gpt-5-nano", description="Databricks LLM endpoint name"
     )
-    llm_temperature: float = Field(default=0.7, description="LLM temperature", ge=0.0, le=2.0)
+    llm_temperature: float = Field(default=1.0, description="LLM temperature", ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, description="Max tokens for LLM response")
 
     # Vector Search
     vector_search_endpoint: str = Field(..., description="Databricks vector search endpoint name")
-    activities_index: str = Field(
-        default="aigc_uat.intent_engine.content_activity_gold_index",
-        description="Databricks vector search index for activities",
-    )
-    books_index: str = Field(
-        default="aigc_uat.intent_engine.content_book_gold_index",
-        description="Databricks vector search index for books",
-    )
-    articles_index: str = Field(
-        default="aigc_uat.intent_engine.content_article_gold_index",
-        description="Databricks vector search index for articles",
-    )
+    activities_index: str = Field(..., description="Databricks vector search index for activities")
+    books_index: str = Field(..., description="Databricks vector search index for books")
+    articles_index: str = Field(..., description="Databricks vector search index for articles")
     embedding_model: str = Field(
         default="databricks-gte-large-en", description="Embedding model name"
     )
@@ -50,10 +41,7 @@ class ProductRecommendationAgentConfig(BaseSettings):
     )
 
     # Prompt Management
-    prompt_name: str = Field(
-        default="prompts:/aigc_uat.intent_engine.product_recommendation_prompt/1",
-        description="MLFlow prompt registry path",
-    )
+    prompt_name: str = Field(..., description="MLflow prompt registry path")
 
     @field_validator("llm_max_tokens", mode="before")
     @classmethod

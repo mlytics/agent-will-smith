@@ -2,10 +2,14 @@
 
 Defines and compiles the LangGraph workflow for product recommendations.
 This is where all nodes are wired together with dependencies injected.
+
+Uses explicit dependency injection - all dependencies passed as parameters.
 """
 
-from functools import lru_cache, partial
+from functools import partial
 from langgraph.graph import StateGraph, START, END
+from databricks.vector_search.client import VectorSearchClient
+from databricks_langchain import ChatDatabricks
 import structlog
 
 from agent.product_recommendation.schemas import AgentState
@@ -14,39 +18,40 @@ from agent.product_recommendation.node import (
     parallel_search_node,
     compose_response_node,
 )
-from agent.product_recommendation.infra.llm_client import get_llm_client
-from agent.product_recommendation.infra.vector_search import get_vector_search_client
 
 logger = structlog.get_logger(__name__)
 
 
-@lru_cache()
-def get_workflow() -> StateGraph:
-    """Get compiled workflow with dependencies injected.
+def create_workflow(
+    vector_client: VectorSearchClient,
+    llm_client: ChatDatabricks,
+) -> StateGraph:
+    """Create compiled workflow with explicit dependency injection.
     
-    Creates workflow with all dependencies baked in using functools.partial.
-    This allows LangGraph nodes to receive dependencies without global imports.
+    All dependencies are passed as parameters (explicit DI).
+    No hidden singleton calls - true dependency injection pattern.
     
-    Thread-safe singleton using @lru_cache.
+    This function is called once at server startup with pooled resources.
+    
+    Args:
+        vector_client: Pooled VectorSearchClient from server startup
+        llm_client: Pooled ChatDatabricks client from server startup
     
     Returns:
-        Compiled StateGraph with dependencies injected
+        Compiled StateGraph with dependencies baked into nodes
     """
-    logger.info("building_workflow_with_dependencies")
-    
-    # Get pooled dependencies (從小組到大)
-    vector_client = get_vector_search_client()
-    llm = get_llm_client()
+    logger.info("building_workflow_with_explicit_dependencies")
     
     # Inject dependencies into nodes using functools.partial
+    # Dependencies are passed in from server startup (explicit DI)
     intent_node_with_deps = partial(
         intent_analysis_node,
-        llm_client=llm
+        llm_client=llm_client  # From parameter (explicit)
     )
     
     search_node_with_deps = partial(
         parallel_search_node,
-        vector_client=vector_client
+        vector_client=vector_client  # From parameter (explicit)
     )
     
     # compose_response_node is pure function (no external dependencies)
@@ -63,12 +68,12 @@ def get_workflow() -> StateGraph:
     workflow.add_edge("parallel_search", "compose_response")
     workflow.add_edge("compose_response", END)
     
-    logger.info("workflow_with_dependencies_built")
+    logger.info("workflow_with_explicit_dependencies_built")
     
     return workflow.compile()
 
 
 __all__ = [
-    "get_workflow",
+    "create_workflow",
 ]
 

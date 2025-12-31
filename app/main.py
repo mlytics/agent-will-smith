@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
     # Import infrastructure and workflow from agent
     from agent.product_recommendation.infra.vector_search import get_vector_search_client
     from agent.product_recommendation.infra.llm_client import get_llm_client
-    from agent.product_recommendation.workflow import get_workflow
+    from agent.product_recommendation.workflow import create_workflow
     from agent.product_recommendation.infra.prompts import load_prompt_from_registry
     from agent.product_recommendation.config import agent_config
     
@@ -78,9 +78,15 @@ async def lifespan(app: FastAPI):
     prompt = load_prompt_from_registry(agent_config.prompt_name)
     logger.info("prompt_cached", prompt_length=len(prompt.text))
     
-    # 4. Workflow (大 - big component, composed of above with DI)
-    workflow = get_workflow()
+    # 4. Workflow (大 - big component, composed of above with explicit DI)
+    workflow = create_workflow(
+        vector_client=vector_client,
+        llm_client=llm_client,
+    )
     logger.info("workflow_with_dependencies_ready")
+    
+    # Store workflow in app state for dependency injection
+    app.state.workflow = workflow
 
     logger.info("application_ready",
                port=config.port,

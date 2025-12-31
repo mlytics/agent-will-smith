@@ -49,8 +49,6 @@ def intent_analysis_node(
                     prompt_length=len(system_prompt),
                     prompt_source=prompt_content.source)
         
-        # Use injected LLM client (always provided via functools.partial)
-        llm = llm_client
         logger.debug("llm_client_injected", trace_id=trace_id)
         
         # Construct user message
@@ -72,8 +70,8 @@ Provide a concise intent summary (2-3 sentences max)."""
                    article_length=len(article_excerpt),
                    question_length=len(state.question))
         
-        # Single LLM call
-        response = llm.invoke([
+        # Single LLM call (use injected client directly)
+        response = llm_client.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ])

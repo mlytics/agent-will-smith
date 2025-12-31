@@ -3,6 +3,7 @@
 Structure:
 - state.py: LangGraph state (AgentState - Pydantic)
 - messages.py: Node input/output messages and context
+- database.py: Vector search result DTOs (for parsing raw results)
 
 All schemas use Pydantic for runtime validation and type safety.
 """
@@ -23,6 +24,13 @@ from agent.product_recommendation.schemas.messages import (
     AgentOutput,
 )
 
+# Database DTOs (vector search results)
+from agent.product_recommendation.schemas.database import (
+    ActivityDTO,
+    BookDTO,
+    ArticleDTO,
+)
+
 __all__ = [
     # State
     "AgentState",
@@ -36,5 +44,9 @@ __all__ = [
     "ComposeResponseOutput",
     "PromptContent",
     "AgentOutput",
+    # Database DTOs
+    "ActivityDTO",
+    "BookDTO",
+    "ArticleDTO",
 ]
 

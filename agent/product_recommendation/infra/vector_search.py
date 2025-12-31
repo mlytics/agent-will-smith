@@ -13,7 +13,7 @@ from databricks.vector_search.client import VectorSearchClient
 
 from core.config import config
 from agent.product_recommendation.config import agent_config
-from agent.product_recommendation.schemas import ProductResult
+from agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -61,64 +61,76 @@ def get_vector_search_client() -> VectorSearchClient:
 def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book", "article"]) -> ProductResult:
     """Parse a single result row from vector search into ProductResult.
     
+    Uses Pydantic DTOs for type-safe parsing and validation.
+    This ensures data quality and catches schema mismatches early.
+    
     Args:
-        result_dict: Dictionary with result data
+        result_dict: Dictionary with result data from vector search
         product_type: Type of product (activity, book, or article)
         
     Returns:
-        ProductResult object
+        ProductResult object with validated data
+        
+    Raises:
+        ValidationError: If result_dict doesn't match expected DTO schema
     """
     if product_type == "activity":
-        product_id = result_dict.get("content_id", "unknown")
-        title = result_dict.get("title", "Untitled Activity")
-        description = result_dict.get("description", None)
-        metadata = {
-            "category": result_dict.get("category"),
-            "location_name": result_dict.get("location_name"),
-            "location_address": result_dict.get("location_address"),
-            "organizer": result_dict.get("organizer"),
-            "start_time": result_dict.get("start_time"),
-            "end_time": result_dict.get("end_time"),
-            "permalink_url": result_dict.get("permalink_url"),
-            "cover_image_urls": result_dict.get("cover_image_urls", []),
-        }
+        # Parse with Pydantic - automatic validation!
+        dto = ActivityDTO.model_validate(result_dict)
+        return ProductResult(
+            product_id=dto.content_id,
+            product_type="activity",
+            title=dto.title,
+            description=dto.description,
+            relevance_score=dto.score,
+            metadata={
+                "category": dto.category,
+                "location_name": dto.location_name,
+                "location_address": dto.location_address,
+                "organizer": dto.organizer,
+                "start_time": dto.start_time,
+                "end_time": dto.end_time,
+                "permalink_url": dto.permalink_url,
+                "cover_image_urls": dto.cover_image_urls,
+            }
+        )
+    
     elif product_type == "book":
-        product_id = result_dict.get("content_id", "unknown")
-        title = result_dict.get("title_main", "Untitled Book")
-        description = result_dict.get("description", None)
-        metadata = {
-            "subtitle": result_dict.get("title_subtitle"),
-            "authors": result_dict.get("authors", []),
-            "categories": result_dict.get("categories", []),
-            "permalink_url": result_dict.get("permalink_url"),
-            "cover_image_url": result_dict.get("cover_image_url"),
-            "prices": result_dict.get("prices", []),
-        }
+        dto = BookDTO.model_validate(result_dict)
+        return ProductResult(
+            product_id=dto.content_id,
+            product_type="book",
+            title=dto.title_main,
+            description=dto.description,
+            relevance_score=dto.score,
+            metadata={
+                "subtitle": dto.title_subtitle,
+                "authors": dto.authors,
+                "categories": dto.categories,
+                "permalink_url": dto.permalink_url,
+                "cover_image_url": dto.cover_image_url,
+                "prices": dto.prices,
+            }
+        )
+    
     else:  # article
-        product_id = result_dict.get("content_id", "unknown")
-        title = result_dict.get("title", "Untitled Article")
-        description = result_dict.get("content", None)  # Full content as description
-        metadata = {
-            "authors": result_dict.get("authors", []),
-            "keywords": result_dict.get("keywords", []),
-            "categories": result_dict.get("categories", []),
-            "permalink_url": result_dict.get("permalink_url"),
-            "thumbnail_url": result_dict.get("thumbnail_url"),
-            "main_image_url": result_dict.get("main_image_url"),
-            "publish_time": result_dict.get("publish_time"),
-        }
-    
-    # Get relevance score
-    relevance_score = result_dict.get("score", 0.0)
-    
-    return ProductResult(
-        product_id=product_id,
-        product_type=product_type,
-        title=title,
-        description=description,
-        relevance_score=relevance_score,
-        metadata=metadata,
-    )
+        dto = ArticleDTO.model_validate(result_dict)
+        return ProductResult(
+            product_id=dto.content_id,
+            product_type="article",
+            title=dto.title,
+            description=dto.content,  # Full article content
+            relevance_score=dto.score,
+            metadata={
+                "authors": dto.authors,
+                "keywords": dto.keywords,
+                "categories": dto.categories,
+                "permalink_url": dto.permalink_url,
+                "thumbnail_url": dto.thumbnail_url,
+                "main_image_url": dto.main_image_url,
+                "publish_time": dto.publish_time,
+            }
+        )
 
 
 def _search_vector_index(
@@ -336,6 +348,7 @@ def _search_vector_index(
 def search_activities_direct(
     query: str,
     trace_id: str,
+    vector_client: VectorSearchClient,
     max_results: int = 10,
     customer_uuid: str | None = None,
 ) -> list[ProductResult]:
@@ -346,13 +359,15 @@ def search_activities_direct(
     Args:
         query: Search query text
         trace_id: Trace ID for logging
+        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
         max_results: Maximum number of results to return
         customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
-        List of activity results as dictionaries
+        List of activity results as ProductResult Pydantic models
     """
-    client = get_vector_search_client()
+    # Use ONLY injected client from pool (DI enforced, no fallback)
+    client = vector_client
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(
@@ -379,6 +394,7 @@ def search_activities_direct(
 def search_books_direct(
     query: str,
     trace_id: str,
+    vector_client: VectorSearchClient,
     max_results: int = 10,
     customer_uuid: str | None = None,
 ) -> list[ProductResult]:
@@ -389,13 +405,15 @@ def search_books_direct(
     Args:
         query: Search query text
         trace_id: Trace ID for logging
+        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
         max_results: Maximum number of results to return
         customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
-        List of book results as dictionaries
+        List of book results as ProductResult Pydantic models
     """
-    client = get_vector_search_client()
+    # Use ONLY injected client from pool (DI enforced, no fallback)
+    client = vector_client
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(
@@ -422,6 +440,7 @@ def search_books_direct(
 def search_articles_direct(
     query: str,
     trace_id: str,
+    vector_client: VectorSearchClient,
     max_results: int = 10,
     customer_uuid: str | None = None,
 ) -> list[ProductResult]:
@@ -432,13 +451,15 @@ def search_articles_direct(
     Args:
         query: Search query text
         trace_id: Trace ID for logging
+        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
         max_results: Maximum number of results to return
         customer_uuid: Optional customer UUID for multi-tenant filtering
 
     Returns:
-        List of article results as dictionaries
+        List of article results as ProductResult Pydantic models
     """
-    client = get_vector_search_client()
+    # Use ONLY injected client from pool (DI enforced, no fallback)
+    client = vector_client
     num_results = min(max_results, agent_config.max_k_products)
 
     logger.info(

@@ -25,14 +25,8 @@ logger = structlog.get_logger(__name__)
 def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
     """Load prompt from MLflow prompt registry with caching.
     
-    This is the ONLY way prompts should be loaded. No hardcoded fallbacks
-    for production use.
-    
     Caching: Uses @lru_cache to cache prompts in memory after first load.
     Subsequent calls return cached version (no MLflow API call).
-    
-    IMPORTANT: Prompt must be created in Databricks UI first using the
-    "Create Prompt" feature in Unity Catalog.
     
     Args:
         prompt_name: Prompt registry path (format: "prompts:/catalog.schema.name/version")
@@ -59,10 +53,8 @@ def load_prompt_from_registry(prompt_name: str | None = None) -> PromptContent:
     
     # Use MLflow's dedicated prompt loading API
     # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
-    # Let MLflow exceptions bubble up to API layer (no try-catch)
     prompt = mlflow.genai.load_prompt(prompt_path)
     
-    # Use .format() method to get the prompt text
     # This is the standard way to extract text from MLflow prompt objects
     prompt_text = prompt.format()
     

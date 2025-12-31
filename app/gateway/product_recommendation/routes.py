@@ -12,7 +12,6 @@ import structlog
 
 from app.middleware.auth import verify_api_key
 from core.exceptions import map_exception_to_http_status, AgentException
-from agent.product_recommendation.workflow import get_workflow
 from app.gateway.product_recommendation.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
@@ -24,6 +23,21 @@ from agent import recommend_products
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+
+def get_workflow(request: Request) -> StateGraph:
+    """Dependency provider for workflow.
+    
+    Returns the compiled workflow from app state.
+    The workflow is created once at server startup with all dependencies injected.
+    
+    Args:
+        request: FastAPI request (provides access to app.state)
+        
+    Returns:
+        Compiled StateGraph with dependencies already baked in
+    """
+    return request.app.state.workflow
 
 
 

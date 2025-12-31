@@ -28,6 +28,7 @@ async def search_vertical(
     query: str,
     k: int,
     trace_id: str,
+    vector_client: VectorSearchClient,
     customer_uuid: str | None = None,
     timeout: float = VECTOR_SEARCH_TIMEOUT_SECONDS,
 ) -> VerticalSearchResult:
@@ -38,6 +39,7 @@ async def search_vertical(
         query: Search query text
         k: Number of results to return
         trace_id: Trace ID for logging
+        vector_client: Injected VectorSearchClient from pool (DI)
         customer_uuid: Optional customer UUID for filtering
         timeout: Timeout in seconds (default: 5s)
         
@@ -63,11 +65,13 @@ async def search_vertical(
     try:
         # Run search in thread pool with timeout
         # Returns list[ProductResult] (Pydantic models)
+        # Pass REQUIRED injected vector_client from pool (DI enforced)
         product_results = await asyncio.wait_for(
             asyncio.to_thread(
                 search_func,
                 query=query,
                 trace_id=trace_id,
+                vector_client=vector_client,
                 max_results=k,
                 customer_uuid=customer_uuid,
             ),
@@ -144,8 +148,9 @@ async def parallel_search_node(
         - errors: dict[str, str]
         - status: "complete" | "partial"
     """
-    # Use injected vector client (always provided via functools.partial)
-    logger.debug("vector_client_injected")
+    # Use injected vector client from pool (DI via functools.partial)
+    logger.debug("vector_client_injected", 
+                client_type=type(vector_client).__name__)
     
     trace_id = state.trace_id
     verticals = state.verticals
@@ -175,6 +180,7 @@ async def parallel_search_node(
             query=query,
             k=state.k,
             trace_id=trace_id,
+            vector_client=vector_client,
             customer_uuid=state.customer_uuid,
             timeout=VECTOR_SEARCH_TIMEOUT_SECONDS,
         )

@@ -25,26 +25,26 @@ async def recommend_products(
     question: str,
     k: int,
     trace_id: str,
+    workflow: StateGraph,
     verticals: list[str] | None = None,
     customer_uuid: str | None = None,
-    workflow: StateGraph | None = None,
 ) -> AgentOutput:
-    """    Product recommendation agent (LangGraph implementation).
+    """Product recommendation agent (LangGraph implementation).
     
     Analyzes article and question, searches requested verticals in parallel,
     and returns grouped product recommendations.
     
-    Dependencies can be injected for testing or passed via FastAPI Depends().
-    If not provided, uses pooled singletons from startup.
+    Dependencies MUST be injected via FastAPI Depends() - no fallbacks.
+    This enforces proper pooling and DI architecture.
     
     Args:
         article: Article text to analyze
         question: Question to guide recommendations
         k: Number of products to recommend per vertical
         trace_id: Trace ID for observability
+        workflow: REQUIRED injected workflow from pool (DI)
         verticals: Which verticals to search (default: all 3)
         customer_uuid: Optional customer UUID for multi-tenant filtering
-        workflow: Optional injected workflow (DI)
         
     Returns:
         AgentOutput (Pydantic model) with:
@@ -68,14 +68,8 @@ async def recommend_products(
                 verticals=verticals,
                 customer_uuid=customer_uuid)
     
-    # Use injected workflow (from FastAPI Depends or direct call)
-    # Note: Can be None for testing - falls back to agent workflow
-    if workflow is None:
-        from agent.product_recommendation.workflow import get_workflow
-        workflow = get_workflow()
-        logger.debug("workflow_from_agent_module", trace_id=trace_id)
-    else:
-        logger.debug("workflow_injected", trace_id=trace_id)
+    # Use ONLY injected workflow from pool (DI enforced, no fallback)
+    logger.debug("workflow_injected", trace_id=trace_id)
     
     # Initialize state (Pydantic model)
     initial_state = AgentState(
