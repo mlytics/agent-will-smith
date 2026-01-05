@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 import structlog
 
 from core.exceptions import map_exception_to_http_status, AgentException
-from app.gateway.product_recommendation.dto.schemas import (
+from app.api.product_recommendation.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,

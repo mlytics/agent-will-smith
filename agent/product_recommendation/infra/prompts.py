@@ -12,7 +12,6 @@ Caching: Prompts are cached in memory after first load for performance.
 import mlflow
 import structlog
 from functools import lru_cache
-from typing import Any
 
 
 from agent.product_recommendation.config import agent_config

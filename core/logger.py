@@ -11,11 +11,12 @@ import logging
 import structlog
 
 
-def configure_logging(log_level: str = "INFO") -> None:
+def configure_logging(log_level: str = "INFO", environment: str = "production") -> None:
     """Configure structlog for the application.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        environment: Application environment (development, staging, production)
     """
     # Map string log level to logging constant
     level_map = {
@@ -27,24 +28,33 @@ def configure_logging(log_level: str = "INFO") -> None:
     }
     log_level_int = level_map.get(log_level.upper(), logging.INFO)
 
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,  # Auto-merge request context
+        structlog.processors.add_log_level,
+        structlog.processors.CallsiteParameterAdder(
+            parameters=[
+                structlog.processors.CallsiteParameter.FILENAME,
+                structlog.processors.CallsiteParameter.LINENO,
+                structlog.processors.CallsiteParameter.FUNC_NAME,
+            ]
+        ),
+        structlog.processors.EventRenamer("message"),  # "event" → "message"
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+
+    # Select renderer based on environment
+    if environment == "development":
+        # Pretty printing for local development
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+    else:
+        # JSON output for production
+        renderer = structlog.processors.JSONRenderer()
+
     # Configure structlog
     structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,  # Auto-merge request context
-            structlog.processors.add_log_level,
-            structlog.processors.CallsiteParameterAdder(
-                parameters=[
-                    structlog.processors.CallsiteParameter.FILENAME,
-                    structlog.processors.CallsiteParameter.LINENO,
-                    structlog.processors.CallsiteParameter.FUNC_NAME,
-                ]
-            ),
-            structlog.processors.EventRenamer("message"),  # "event" → "message"
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
-        ],
+        processors=shared_processors + [renderer],
         wrapper_class=structlog.make_filtering_bound_logger(log_level_int),
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
