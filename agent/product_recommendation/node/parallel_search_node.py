@@ -1,0 +1,212 @@
+"""Parallel vector search node for LangGraph workflow.
+
+Searches all requested verticals in parallel with timeout handling.
+"""
+
+import asyncio
+import structlog
+
+from agent.product_recommendation.constants import VERTICALS
+from agent.product_recommendation.schemas import (
+    AgentState,
+    ParallelSearchOutput,
+    VerticalSearchResult,
+)
+from agent.product_recommendation.node.query_builder import build_search_query
+from agent.product_recommendation.infra.vector_search import VectorSearchClient
+from agent.product_recommendation.config import agent_config
+from core.exceptions import VectorSearchTimeout, VectorSearchError
+
+# Timeout per vertical search (5 seconds)
+VECTOR_SEARCH_TIMEOUT_SECONDS = 5.0
+
+
+class ParallelSearchNode:
+    """Node that searches all verticals in parallel.
+
+    Injectable class following the joke_agent pattern.
+    """
+
+    def __init__(self, vector_client: VectorSearchClient, logger: structlog.BoundLogger):
+        """Initialize with injected dependencies.
+
+        Args:
+            vector_client: Vector search client for making searches
+            logger: Structlog logger with bound context
+        """
+        self.vector_client = vector_client
+        self.logger = logger
+
+    async def __call__(self, state: AgentState) -> ParallelSearchOutput:
+        """Execute parallel vector searches for all requested verticals.
+
+        Args:
+            state: Current workflow state (Pydantic model)
+
+        Returns:
+            ParallelSearchOutput with results per vertical
+        """
+        verticals = state.verticals
+        intent = state.intent or ""
+
+        self.logger.info(
+            "parallel_search_started",
+            verticals=verticals,
+            k=state.k,
+            has_intent=bool(intent),
+        )
+
+        # Build search query from intent + article + question
+        query = build_search_query(
+            article=state.article,
+            question=state.question,
+            intent=intent,
+        )
+
+        self.logger.debug("search_query_built", query_length=len(query))
+
+        # Launch parallel searches for all requested verticals
+        tasks = [
+            self._search_vertical(
+                vertical=v,
+                query=query,
+                k=state.k,
+                customer_uuid=state.customer_uuid,
+            )
+            for v in verticals
+        ]
+
+        self.logger.info("launching_parallel_searches", num_verticals=len(tasks))
+
+        # Execute all searches in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Aggregate results
+        updates = {
+            "activities": [],
+            "books": [],
+            "articles": [],
+            "errors": {},
+        }
+
+        for i, result in enumerate(results):
+            vertical = verticals[i]
+
+            if isinstance(result, Exception):
+                self.logger.error(
+                    "vertical_search_failed",
+                    vertical=vertical,
+                    error=str(result),
+                    error_type=type(result).__name__,
+                    exc_info=result,
+                )
+                updates["errors"][vertical] = f"{type(result).__name__}: {str(result)}"
+                updates[vertical] = []
+            else:
+                updates[vertical] = result.products
+                if result.error:
+                    updates["errors"][vertical] = result.error
+                    self.logger.warning(
+                        "vertical_search_had_error",
+                        vertical=result.vertical,
+                        error=result.error,
+                    )
+
+        # Determine overall status
+        has_errors = len(updates["errors"]) > 0
+        status = "partial" if has_errors else "complete"
+
+        # Count results
+        total_found = sum(len(updates[v]) for v in verticals)
+
+        self.logger.info(
+            "parallel_search_completed",
+            activities_count=len(updates["activities"]),
+            books_count=len(updates["books"]),
+            articles_count=len(updates["articles"]),
+            total_found=total_found,
+            status=status,
+            errors_count=len(updates["errors"]),
+        )
+
+        return ParallelSearchOutput(
+            activities=updates["activities"],
+            books=updates["books"],
+            articles=updates["articles"],
+            errors=updates["errors"],
+            status=status,
+        )
+
+    async def _search_vertical(
+        self,
+        vertical: VERTICALS,
+        query: str,
+        k: int,
+        customer_uuid: str | None = None,
+        timeout: float = VECTOR_SEARCH_TIMEOUT_SECONDS,
+    ) -> VerticalSearchResult:
+        """Search a single vertical with timeout.
+
+        Args:
+            vertical: Which vertical to search
+            query: Search query text
+            k: Number of results to return
+            customer_uuid: Optional customer UUID for filtering
+            timeout: Timeout in seconds (default: 5s)
+
+        Returns:
+            VerticalSearchResult with products or error
+        """
+        search_methods = {
+            "activities": (self.vector_client.search_activities, agent_config.activities_index),
+            "books": (self.vector_client.search_books, agent_config.books_index),
+            "articles": (self.vector_client.search_articles, agent_config.articles_index),
+        }
+
+        search_method, index_name = search_methods[vertical]
+
+        self.logger.info("vertical_search_starting", vertical=vertical, timeout=timeout)
+
+        try:
+            # Run search in thread pool with timeout
+            product_results = await asyncio.wait_for(
+                asyncio.to_thread(
+                    search_method,
+                    query=query,
+                    index_name=index_name,
+                    max_results=k,
+                    customer_uuid=customer_uuid,
+                ),
+                timeout=timeout,
+            )
+
+            # Convert Pydantic models to dicts for state storage
+            results_dicts = [r.model_dump() for r in product_results]
+
+            self.logger.info(
+                "vertical_search_completed",
+                vertical=vertical,
+                results_count=len(results_dicts),
+            )
+
+            return VerticalSearchResult(vertical=vertical, products=results_dicts, error=None)
+
+        except asyncio.TimeoutError as e:
+            self.logger.warning(
+                "vertical_search_timeout",
+                vertical=vertical,
+                timeout=timeout,
+                exc_info=True,
+            )
+            # Use current trace_id from context if relevant logs are needed, relying on structlog context
+            raise VectorSearchTimeout(f"Search timeout for {vertical} after {timeout}s") from e
+
+        except Exception as e:
+            self.logger.error(
+                "vertical_search_error",
+                vertical=vertical,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            raise VectorSearchError(f"Search failed for {vertical}: {str(e)}") from e

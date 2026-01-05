@@ -9,12 +9,11 @@ This module configures structured logging with:
 
 import logging
 import structlog
-from structlog.contextvars import merge_contextvars
 
 
 def configure_logging(log_level: str = "INFO") -> None:
     """Configure structlog for the application.
-    
+
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
@@ -27,7 +26,7 @@ def configure_logging(log_level: str = "INFO") -> None:
         "CRITICAL": logging.CRITICAL,
     }
     log_level_int = level_map.get(log_level.upper(), logging.INFO)
-    
+
     # Configure structlog
     structlog.configure(
         processors=[
@@ -51,13 +50,13 @@ def configure_logging(log_level: str = "INFO") -> None:
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
-    
+
     # Configure stdlib logging to use structlog
     logging.basicConfig(
         format="%(message)s",
         level=log_level_int,
     )
-    
+
     # Suppress verbose third-party library logs
     # These libraries are too chatty at DEBUG level
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -66,4 +65,3 @@ def configure_logging(log_level: str = "INFO") -> None:
     logging.getLogger("databricks").setLevel(logging.WARNING)
     logging.getLogger("mlflow").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
-

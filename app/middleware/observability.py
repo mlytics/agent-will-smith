@@ -17,13 +17,16 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from structlog.contextvars import clear_contextvars, bind_contextvars
 
-from core.config import config
 
 logger = structlog.get_logger(__name__)
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
     """Middleware for request/response logging and metrics collection."""
+
+    def __init__(self, app, environment: str):
+        super().__init__(app)
+        self.environment = environment
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request with observability instrumentation.
@@ -37,7 +40,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         """
         # Clear any previous context to prevent leakage between requests
         clear_contextvars()
-        
+
         # Generate trace ID for request tracking
         trace_id = str(uuid.uuid4())
         request.state.trace_id = trace_id
@@ -92,9 +95,8 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 status_code=500,
                 content={
                     "error": "Internal server error",
-                    "detail": str(exc) if config.environment == "development" else None,
+                    "detail": str(exc) if self.environment == "development" else None,
                     "trace_id": trace_id,
                 },
                 headers={"X-Trace-ID": trace_id},
             )
-

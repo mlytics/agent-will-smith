@@ -4,17 +4,20 @@ Follows guideline: "Keep business rules out of prompts" - auth logic in code, no
 """
 
 from typing import Annotated
-from fastapi import HTTPException, Security, status
+from fastapi import HTTPException, Security, status, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from dependency_injector.wiring import inject, Provide
 
-from core.config import config
+from core.container import CoreContainer
 
 # Bearer token security scheme
 security = HTTPBearer()
 
 
+@inject
 async def verify_api_key(
-    credentials: Annotated[HTTPAuthorizationCredentials, Security(security)]
+    credentials: Annotated[HTTPAuthorizationCredentials, Security(security)],
+    api_key: str = Depends(Provide[CoreContainer.fastapi_config.provided.api_key]),
 ) -> str:
     """Verify Bearer token against configured API key.
 
@@ -27,11 +30,10 @@ async def verify_api_key(
     Raises:
         HTTPException: If token is invalid (401 Unauthorized)
     """
-    if credentials.credentials != config.api_key:
+    if credentials.credentials != api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return credentials.credentials
-

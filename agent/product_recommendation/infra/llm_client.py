@@ -1,58 +1,57 @@
-"""LLM client pooling for Databricks LLM endpoint.
+"""LLM client for Databricks LLM endpoint.
 
-Creates LLM client once at startup and reuses across all requests.
-Thread-safe with double-checked locking.
+Injectable client class for LLM interactions with dependency injection support.
 """
 
-import threading
 from databricks_langchain import ChatDatabricks
 import structlog
 
-from agent.product_recommendation.config import agent_config
 
-logger = structlog.get_logger(__name__)
+class LLMClient:
+    """Client class for LLM interactions with dependency injection support.
 
-
-# Global LLM client pool (singleton pattern) - thread-safe
-_llm_client_pool: ChatDatabricks | None = None
-_llm_client_lock = threading.Lock()
-
-
-def get_llm_client() -> ChatDatabricks:
-    """Get or create LLM client singleton (connection pooling).
-    
-    Creates the LLM client once and reuses it across all requests.
-    Thread-safe singleton pattern with double-checked locking.
-    
-    Note: Temperature is fixed at pool creation (agent_config.llm_temperature).
-    All requests use the same temperature. This is appropriate for intent analysis
-    which always needs the same temperature setting.
-    
-    Returns:
-        Shared ChatDatabricks instance
+    This replaces the global singleton pattern with an injectable class.
+    The DI container manages the lifecycle as a singleton.
     """
-    global _llm_client_pool
-    
-    # Fast path: return existing client without lock (performance optimization)
-    if _llm_client_pool is not None:
-        return _llm_client_pool
-    
-    # Slow path: acquire lock and create client (thread-safe)
-    with _llm_client_lock:
-        # Double-check: another thread might have created it while we waited
-        if _llm_client_pool is None:
-            logger.info("creating_llm_client_pool",
-                       endpoint=agent_config.llm_endpoint,
-                       temperature=agent_config.llm_temperature)
-            
-            _llm_client_pool = ChatDatabricks(
-                endpoint=agent_config.llm_endpoint,
-                temperature=agent_config.llm_temperature,
-                max_tokens=300,  # For intent analysis
-            )
-            
-            logger.info("llm_client_pool_created",
-                       endpoint=agent_config.llm_endpoint)
-        
-        return _llm_client_pool
 
+    def __init__(
+        self,
+        endpoint: str,
+        temperature: float,
+        max_tokens: int,
+        logger: structlog.BoundLogger,
+    ):
+        """Initialize LLM client with configuration.
+
+        Args:
+            endpoint: The Databricks model endpoint to use
+            temperature: Temperature for generation
+            max_tokens: Maximum tokens for generation
+            logger: Structlog logger with bound context
+        """
+        self.endpoint = endpoint
+        self.logger = logger
+        self._llm = ChatDatabricks(
+            endpoint=endpoint,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        self.logger.info("llm_client_initialized", endpoint=endpoint)
+        
+    def invoke_with_messages(self, messages: list[dict]) -> str:
+        """Invoke the LLM with a list of messages.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys
+
+        Returns:
+            The generated text response
+        """
+        try:
+            self.logger.info("llm_invoke_messages", message_count=len(messages))
+            response = self._llm.invoke(messages)
+            self.logger.info("llm_response", response_length=len(response.content))
+            return response.content.strip()
+        except Exception as e:
+            self.logger.error("llm_failed", error=str(e))
+            raise Exception(f"LLM invocation failed: {str(e)}") from e

@@ -1,19 +1,19 @@
 """Agent module for product recommendation.
 
-Exports the main agent function for use in API routes.
+Exports the main agent class and DI container for use in API routes.
 
 Structure:
 - product_recommendation/: Product recommendation agent module
-  - agent.py: Main agent orchestration (LangGraph)
-  - workflow.py: LangGraph workflow definition
+  - product_recommendation_agent.py: Main agent class (LangGraph)
+  - container.py: DI Container (dependency_injector)
+  - core/: ExecutionContext, Logger
   - config/: Agent-specific configuration
   - node/: LangGraph nodes (intent, search, composer)
-  - infra/: Infrastructure (vector search, prompts)
-  - schemas.py: State and DTOs
-  - scorers.py: MLflow evaluation scorers
+  - infra/: Infrastructure (vector search, LLM client, prompts)
+  - schemas/: State and DTOs
 """
 
-from agent.product_recommendation.agent import recommend_products
+from agent.product_recommendation.product_recommendation_agent import ProductRecommendationAgent
+from agent.product_recommendation.container import Container
 
-__all__ = ["recommend_products"]
-
+__all__ = ["ProductRecommendationAgent", "Container"]

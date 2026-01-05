@@ -1,180 +1,177 @@
-"""Vector search tools for Databricks Vector Search.
+"""Vector search client for Databricks Vector Search.
 
-Follows guidelines:
-- "Tools must be deterministic at the interface level"
-- "Tools return structured data, not English"
-- "Tools should be small and single-purpose"
-- "Tools are capabilities; orchestration decides sequence"
+Injectable client class for vector search with dependency injection support.
 """
 
 from typing import Literal
-import threading
-from databricks.vector_search.client import VectorSearchClient
-
-from core.config import config
-from agent.product_recommendation.config import agent_config
-from agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
+from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
 import structlog
 
-logger = structlog.get_logger(__name__)
+from agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
+from core.exceptions import VectorSearchError
 
 
-# Global client pool (singleton pattern) - thread-safe
-_vector_search_client_pool: VectorSearchClient | None = None
-_vector_search_client_lock = threading.Lock()
+class VectorSearchClient:
+    """Client class for vector search with dependency injection support.
 
-
-def get_vector_search_client() -> VectorSearchClient:
-    """Get or create vector search client singleton (connection pooling).
-    
-    Creates the client once and reuses it across all requests.
-    Thread-safe singleton pattern with double-checked locking.
-    
-    Returns:
-        Shared VectorSearchClient instance
+    This replaces the global singleton pattern with an injectable class.
+    The DI container manages the lifecycle as a singleton.
     """
-    global _vector_search_client_pool
-    
-    # Fast path: return existing client without lock (performance optimization)
-    if _vector_search_client_pool is not None:
-        return _vector_search_client_pool
-    
-    # Slow path: acquire lock and create client (thread-safe)
-    with _vector_search_client_lock:
-        # Double-check: another thread might have created it while we waited
-        if _vector_search_client_pool is None:
-            logger.info("creating_vector_search_client_pool",
-                       workspace_url=config.databricks.databricks_host)
-            
-            _vector_search_client_pool = VectorSearchClient(
-                workspace_url=config.databricks.databricks_host,
-                service_principal_client_id=config.databricks.databricks_client_id,
-                service_principal_client_secret=config.databricks.databricks_client_secret,
-                disable_notice=True
+
+    def __init__(
+        self,
+        workspace_url: str,
+        client_id: str,
+        client_secret: str,
+        endpoint_name: str,
+        logger: structlog.BoundLogger,
+    ):
+        """Initialize vector search client with configuration.
+
+        Args:
+            workspace_url: Databricks workspace URL
+            client_id: Service principal client ID
+            client_secret: Service principal client secret
+            endpoint_name: Vector search endpoint name
+            logger: Structlog logger with bound context
+        """
+        self.endpoint_name = endpoint_name
+        self.logger = logger
+        self._client = DatabricksVectorSearchClient(
+            workspace_url=workspace_url,
+            service_principal_client_id=client_id,
+            service_principal_client_secret=client_secret,
+            disable_notice=True,
+        )
+        self.logger.info("vector_search_client_initialized", endpoint=endpoint_name)
+
+    def search_activities(
+        self,
+        query: str,
+        index_name: str,
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Search activities index.
+
+        Args:
+            query: Search query text
+            index_name: Name of the activities index
+            max_results: Maximum number of results
+            customer_uuid: Optional customer UUID for filtering
+
+        Returns:
+            List of ProductResult objects
+        """
+        return self._search_index(query, index_name, max_results, "activity", customer_uuid)
+
+    def search_books(
+        self,
+        query: str,
+        index_name: str,
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Search books index."""
+        return self._search_index(query, index_name, max_results, "book", customer_uuid)
+
+    def search_articles(
+        self,
+        query: str,
+        index_name: str,
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Search articles index."""
+        return self._search_index(query, index_name, max_results, "article", customer_uuid)
+
+    def _search_index(
+        self,
+        query_text: str,
+        index_name: str,
+        num_results: int,
+        product_type: Literal["activity", "book", "article"],
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Execute vector search query against a specific index.
+
+        Args:
+            query_text: Query text to search for
+            index_name: Name of the vector search index
+            num_results: Number of results to return
+            product_type: Type of product being searched
+            customer_uuid: Optional customer UUID for multi-tenant filtering
+
+        Returns:
+            List of ProductResult objects
+        """
+        self.logger.info(
+            "vector_search_starting",
+            index_name=index_name,
+            product_type=product_type,
+            query_length=len(query_text),
+            num_results=num_results,
+            customer_uuid=customer_uuid,
+        )
+
+        try:
+            # Get vector search index
+            index = self._client.get_index(endpoint_name=self.endpoint_name, index_name=index_name)
+
+            # Define columns to fetch based on product type
+            columns = self._get_columns_for_product_type(product_type)
+
+            # Build filters for multi-tenant isolation
+            filters = {}
+            if customer_uuid:
+                filters["customer_uuid"] = customer_uuid
+
+            # Execute similarity search
+            if filters:
+                results = index.similarity_search(
+                    query_text=query_text,
+                    columns=columns,
+                    filters=filters,
+                    num_results=num_results,
+                )
+            else:
+                results = index.similarity_search(
+                    query_text=query_text,
+                    columns=columns,
+                    num_results=num_results,
+                )
+
+            # Parse response
+            products = self._parse_results(results, product_type, columns)
+
+            self.logger.info(
+                "vector_search_completed",
+                index_name=index_name,
+                product_type=product_type,
+                results_count=len(products),
             )
-            
-            logger.info("vector_search_client_pool_created")
-        
-        return _vector_search_client_pool
 
+            return products
 
-def _parse_result_row(result_dict: dict, product_type: Literal["activity", "book", "article"]) -> ProductResult:
-    """Parse a single result row from vector search into ProductResult.
-    
-    Uses Pydantic DTOs for type-safe parsing and validation.
-    This ensures data quality and catches schema mismatches early.
-    
-    Args:
-        result_dict: Dictionary with result data from vector search
-        product_type: Type of product (activity, book, or article)
-        
-    Returns:
-        ProductResult object with validated data
-        
-    Raises:
-        ValidationError: If result_dict doesn't match expected DTO schema
-    """
-    if product_type == "activity":
-        # Parse with Pydantic - automatic validation!
-        dto = ActivityDTO.model_validate(result_dict)
-        return ProductResult(
-            product_id=dto.content_id,
-            product_type="activity",
-            title=dto.title,
-            description=dto.description,
-            relevance_score=dto.score,
-            metadata={
-                "category": dto.category,
-                "location_name": dto.location_name,
-                "location_address": dto.location_address,
-                "organizer": dto.organizer,
-                "start_time": dto.start_time,
-                "end_time": dto.end_time,
-                "permalink_url": dto.permalink_url,
-                "cover_image_urls": dto.cover_image_urls,
-            }
-        )
-    
-    elif product_type == "book":
-        dto = BookDTO.model_validate(result_dict)
-        return ProductResult(
-            product_id=dto.content_id,
-            product_type="book",
-            title=dto.title_main,
-            description=dto.description,
-            relevance_score=dto.score,
-            metadata={
-                "subtitle": dto.title_subtitle,
-                "authors": dto.authors,
-                "categories": dto.categories,
-                "permalink_url": dto.permalink_url,
-                "cover_image_url": dto.cover_image_url,
-                "prices": dto.prices,
-            }
-        )
-    
-    else:  # article
-        dto = ArticleDTO.model_validate(result_dict)
-        return ProductResult(
-            product_id=dto.content_id,
-            product_type="article",
-            title=dto.title,
-            description=dto.content,  # Full article content
-            relevance_score=dto.score,
-            metadata={
-                "authors": dto.authors,
-                "keywords": dto.keywords,
-                "categories": dto.categories,
-                "permalink_url": dto.permalink_url,
-                "thumbnail_url": dto.thumbnail_url,
-                "main_image_url": dto.main_image_url,
-                "publish_time": dto.publish_time,
-            }
-        )
+        except Exception as e:
+            self.logger.error(
+                "vector_search_failed",
+                index_name=index_name,
+                product_type=product_type,
+                error=str(e),
+                exc_info=True,
+            )
+            raise VectorSearchError(
+                f"Vector search failed for {product_type} in {index_name}: {str(e)}"
+            ) from e
 
-
-def _search_vector_index(
-    client: VectorSearchClient,
-    index_name: str,
-    query_text: str,
-    num_results: int,
-    product_type: Literal["activity", "book", "article"],
-    customer_uuid: str | None = None,
-) -> list[ProductResult]:
-    """Execute vector search query against a specific index.
-
-    Args:
-        client: Vector search client
-        index_name: Name of the vector search index
-        query_text: Query text to search for
-        num_results: Number of results to return
-        product_type: Type of product being searched
-        customer_uuid: Optional customer UUID for multi-tenant filtering
-
-    Returns:
-        List of ProductResult objects
-
-    Note: This is a pure function - no side effects, deterministic output structure.
-    """
-    logger.info("vector_search_starting",
-               index_name=index_name,
-               product_type=product_type,
-               query_length=len(query_text),
-               num_results=num_results,
-               customer_uuid=customer_uuid,
-               endpoint=agent_config.vector_search_endpoint)
-    
-    try:
-        # Get vector search index
-        logger.debug("getting_vector_index", index_name=index_name, endpoint=agent_config.vector_search_endpoint)
-        index = client.get_index(endpoint_name=agent_config.vector_search_endpoint, index_name=index_name)
-        logger.debug("vector_index_retrieved", index_name=index_name)
-
-        # Define columns to fetch based on product type
-        # CRITICAL: Must include primary key for product_id!
+    def _get_columns_for_product_type(
+        self, product_type: Literal["activity", "book", "article"]
+    ) -> list[str]:
+        """Get columns to fetch based on product type."""
         if product_type == "activity":
-            columns = [
-                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
+            return [
+                "content_id",
                 "title",
                 "description",
                 "category",
@@ -187,8 +184,8 @@ def _search_vector_index(
                 "cover_image_urls",
             ]
         elif product_type == "book":
-            columns = [
-                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
+            return [
+                "content_id",
                 "title_main",
                 "title_subtitle",
                 "description",
@@ -199,8 +196,8 @@ def _search_vector_index(
                 "prices",
             ]
         else:  # article
-            columns = [
-                "content_id",  # ⭐ PRIMARY KEY - REQUIRED
+            return [
+                "content_id",
                 "title",
                 "content",
                 "authors",
@@ -212,273 +209,113 @@ def _search_vector_index(
                 "publish_time",
             ]
 
-        # Build filters for multi-tenant isolation
-        filters = {}
-        if customer_uuid:
-            filters["customer_uuid"] = customer_uuid
-            logger.debug("applying_customer_filter", customer_uuid=customer_uuid)
-
-        # Execute similarity search
-        if filters:
-            results = index.similarity_search(
-                query_text=query_text,
-                columns=columns,
-                filters=filters,
-                num_results=num_results,
-            )
-        else:
-            results = index.similarity_search(
-                query_text=query_text,
-                columns=columns,
-                num_results=num_results,
-            )
-
-        # Parse response - Databricks vector search returns specific format
+    def _parse_results(
+        self,
+        results: dict,
+        product_type: Literal["activity", "book", "article"],
+        columns: list[str],
+    ) -> list[ProductResult]:
+        """Parse vector search results into ProductResult objects."""
         products = []
-        
+
         if not isinstance(results, dict):
-            logger.error("unexpected_response_type", 
-                        response_type=type(results).__name__,
-                        index_name=index_name,
-                        exc_info=True)
-            from core.exceptions import VectorSearchError
-            raise VectorSearchError(
-                f"Unexpected response type from vector search: {type(results).__name__}"
-            )
-        
-        # Get result data and manifest
+            self.logger.error("unexpected_response_type", response_type=type(results).__name__)
+            raise VectorSearchError(f"Unexpected response type: {type(results).__name__}")
+
         result_data = results.get("result", {})
         data_array = result_data.get("data_array", [])
         manifest = result_data.get("manifest", {})
-        
-        # Column info from manifest
+
+        # Get column names from manifest
         column_info = manifest.get("columns", [])
         if column_info:
-            # Extract column names from manifest
-            # Manifest format: [{"name": "col1"}, {"name": "col2"}, ...]
-            column_names = [col.get("name") if isinstance(col, dict) else col 
-                           for col in column_info]
+            column_names = [
+                col.get("name") if isinstance(col, dict) else col for col in column_info
+            ]
         else:
-            column_names = columns  # Fallback to requested columns
-        
-        logger.debug("vector_search_response_parsed",
-                    data_array_length=len(data_array),
-                    column_count=len(column_names),
-                    data_type=type(data_array[0]).__name__ if data_array else "empty")
-        
-        # Log what we got back
-        logger.info("vector_search_response_received",
-                   index_name=index_name,
-                   product_type=product_type,
-                   data_array_count=len(data_array),
-                   column_names_count=len(column_names))
-        
-        # Process each result row
-        for idx, row_data in enumerate(data_array):
-            # Check if row is a list (column values) or dict
-            if isinstance(row_data, list):
-                # Row is a list of values
-                # CRITICAL: Last element is the similarity score (not in column_names)
-                # Format: [col1, col2, ..., colN, score]
-                if len(row_data) > len(column_names):
-                    # Extract score (last element)
-                    score = row_data[-1]
-                    data_values = row_data[:-1]
-                else:
-                    score = 0.0
-                    data_values = row_data
-                
-                # Map column values to names
-                result_dict = dict(zip(column_names, data_values))
-                result_dict["score"] = score  # Add score explicitly
-                
-                logger.debug("parsed_row_from_list", 
-                           row_index=idx,
-                           score=score,
-                           result_dict_keys=list(result_dict.keys()))
-            elif isinstance(row_data, dict):
-                # Row is already a dict
-                result_dict = row_data
-                logger.debug("parsed_row_from_dict", result_dict_keys=list(result_dict.keys()))
-            else:
-                logger.warning("unexpected_row_format", row_type=type(row_data).__name__)
-                continue
-            
-            # Parse into ProductResult
-            try:
-                product = _parse_result_row(result_dict, product_type)
-                products.append(product)
-                logger.info("product_parsed_successfully", 
-                           product_id=product.product_id,
-                           product_type=product_type,
-                           title=product.title,
-                           score=product.relevance_score)
-            except Exception as e:
-                logger.error("failed_to_parse_row", error=str(e), row_data=result_dict, exc_info=True)
-                continue
+            column_names = columns
 
-        logger.info(
-            "vector_search_completed",
-            index_name=index_name,
-            product_type=product_type,
-            results_count=len(products),
-        )
+        for row_data in data_array:
+            try:
+                if isinstance(row_data, list):
+                    # Extract score (last element) if present
+                    if len(row_data) > len(column_names):
+                        score = row_data[-1]
+                        data_values = row_data[:-1]
+                    else:
+                        score = 0.0
+                        data_values = row_data
+                    result_dict = dict(zip(column_names, data_values))
+                    result_dict["score"] = score
+                elif isinstance(row_data, dict):
+                    result_dict = row_data
+                else:
+                    continue
+
+                product = self._parse_result_row(result_dict, product_type)
+                products.append(product)
+
+            except Exception as e:
+                self.logger.error("failed_to_parse_row", error=str(e), exc_info=True)
+                continue
 
         return products
 
-    except Exception as e:
-        # Fail fast - raise exception with context (no silent failures)
-        logger.error(
-            "vector_search_failed",
-            index_name=index_name,
-            product_type=product_type,
-            customer_uuid=customer_uuid,
-            error=str(e),
-            error_type=type(e).__name__,
-            exc_info=True,  # Includes line numbers in logs
-        )
-        # Raise with context - preserves stack trace showing exact line that failed
-        from core.exceptions import VectorSearchError
-        raise VectorSearchError(
-            f"Vector search failed for {product_type} in {index_name} "
-            f"(customer: {customer_uuid}): {str(e)}"
-        ) from e  # Preserves original exception + line number
-
-
-def search_activities_direct(
-    query: str,
-    trace_id: str,
-    vector_client: VectorSearchClient,
-    max_results: int = 10,
-    customer_uuid: str | None = None,
-) -> list[ProductResult]:
-    """Search for relevant activities (direct call, no ToolRuntime).
-
-    This is the direct function for calling outside of agent frameworks.
-
-    Args:
-        query: Search query text
-        trace_id: Trace ID for logging
-        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
-        max_results: Maximum number of results to return
-        customer_uuid: Optional customer UUID for multi-tenant filtering
-
-    Returns:
-        List of activity results as ProductResult Pydantic models
-    """
-    # Use ONLY injected client from pool (DI enforced, no fallback)
-    client = vector_client
-    num_results = min(max_results, agent_config.max_k_products)
-
-    logger.info(
-        "searching_activities",
-        trace_id=trace_id,
-        query_length=len(query),
-        num_results=num_results,
-        customer_uuid=customer_uuid,
-    )
-
-    results = _search_vector_index(
-        client=client,
-        index_name=agent_config.activities_index,
-        query_text=query,
-        num_results=num_results,
-        product_type="activity",
-        customer_uuid=customer_uuid,
-    )
-
-    # Return Pydantic models directly for type safety
-    return results
-
-
-def search_books_direct(
-    query: str,
-    trace_id: str,
-    vector_client: VectorSearchClient,
-    max_results: int = 10,
-    customer_uuid: str | None = None,
-) -> list[ProductResult]:
-    """Search for relevant books (direct call, no ToolRuntime).
-
-    This is the direct function for calling outside of agent frameworks.
-
-    Args:
-        query: Search query text
-        trace_id: Trace ID for logging
-        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
-        max_results: Maximum number of results to return
-        customer_uuid: Optional customer UUID for multi-tenant filtering
-
-    Returns:
-        List of book results as ProductResult Pydantic models
-    """
-    # Use ONLY injected client from pool (DI enforced, no fallback)
-    client = vector_client
-    num_results = min(max_results, agent_config.max_k_products)
-
-    logger.info(
-        "searching_books",
-        trace_id=trace_id,
-        query_length=len(query),
-        num_results=num_results,
-        customer_uuid=customer_uuid,
-    )
-
-    results = _search_vector_index(
-        client=client,
-        index_name=agent_config.books_index,
-        query_text=query,
-        num_results=num_results,
-        product_type="book",
-        customer_uuid=customer_uuid,
-    )
-
-    # Return Pydantic models directly for type safety
-    return results
-
-
-def search_articles_direct(
-    query: str,
-    trace_id: str,
-    vector_client: VectorSearchClient,
-    max_results: int = 10,
-    customer_uuid: str | None = None,
-) -> list[ProductResult]:
-    """Search for relevant articles (direct call, no ToolRuntime).
-
-    This is the direct function for calling outside of agent frameworks.
-
-    Args:
-        query: Search query text
-        trace_id: Trace ID for logging
-        vector_client: REQUIRED injected VectorSearchClient from pool (DI)
-        max_results: Maximum number of results to return
-        customer_uuid: Optional customer UUID for multi-tenant filtering
-
-    Returns:
-        List of article results as ProductResult Pydantic models
-    """
-    # Use ONLY injected client from pool (DI enforced, no fallback)
-    client = vector_client
-    num_results = min(max_results, agent_config.max_k_products)
-
-    logger.info(
-        "searching_articles",
-        trace_id=trace_id,
-        query_length=len(query),
-        num_results=num_results,
-        customer_uuid=customer_uuid,
-    )
-
-    results = _search_vector_index(
-        client=client,
-        index_name=agent_config.articles_index,
-        query_text=query,
-        num_results=num_results,
-        product_type="article",
-        customer_uuid=customer_uuid,
-    )
-
-    # Return Pydantic models directly for type safety
-    return results
-
+    def _parse_result_row(
+        self, result_dict: dict, product_type: Literal["activity", "book", "article"]
+    ) -> ProductResult:
+        """Parse a single result row into ProductResult."""
+        if product_type == "activity":
+            dto = ActivityDTO.model_validate(result_dict)
+            return ProductResult(
+                product_id=dto.content_id,
+                product_type="activity",
+                title=dto.title,
+                description=dto.description,
+                relevance_score=dto.score,
+                metadata={
+                    "category": dto.category,
+                    "location_name": dto.location_name,
+                    "location_address": dto.location_address,
+                    "organizer": dto.organizer,
+                    "start_time": dto.start_time,
+                    "end_time": dto.end_time,
+                    "permalink_url": dto.permalink_url,
+                    "cover_image_urls": dto.cover_image_urls,
+                },
+            )
+        elif product_type == "book":
+            dto = BookDTO.model_validate(result_dict)
+            return ProductResult(
+                product_id=dto.content_id,
+                product_type="book",
+                title=dto.title_main,
+                description=dto.description,
+                relevance_score=dto.score,
+                metadata={
+                    "subtitle": dto.title_subtitle,
+                    "authors": dto.authors,
+                    "categories": dto.categories,
+                    "permalink_url": dto.permalink_url,
+                    "cover_image_url": dto.cover_image_url,
+                    "prices": dto.prices,
+                },
+            )
+        else:  # article
+            dto = ArticleDTO.model_validate(result_dict)
+            return ProductResult(
+                product_id=dto.content_id,
+                product_type="article",
+                title=dto.title,
+                description=dto.content,
+                relevance_score=dto.score,
+                metadata={
+                    "authors": dto.authors,
+                    "keywords": dto.keywords,
+                    "categories": dto.categories,
+                    "permalink_url": dto.permalink_url,
+                    "thumbnail_url": dto.thumbnail_url,
+                    "main_image_url": dto.main_image_url,
+                    "publish_time": dto.publish_time,
+                },
+            )

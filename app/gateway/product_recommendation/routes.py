@@ -1,16 +1,13 @@
 """API routes for product recommendation endpoints.
 
 Follows guideline: "1 HTTP URL ↔ 1 agent"
-Each endpoint maps to a single agent function.
+Each endpoint maps to a single agent.
 """
 
 import time
-from typing import Annotated
 from fastapi import APIRouter, Depends, Request, HTTPException
-from langgraph.graph import StateGraph
 import structlog
 
-from app.middleware.auth import verify_api_key
 from core.exceptions import map_exception_to_http_status, AgentException
 from app.gateway.product_recommendation.dto.schemas import (
     RecommendProductsRequest,
@@ -18,28 +15,13 @@ from app.gateway.product_recommendation.dto.schemas import (
     ProductRecommendation,
     VerticalResults,
 )
-from agent import recommend_products
+from dependency_injector.wiring import inject, Provide
+from agent.product_recommendation.container import Container
+from agent.product_recommendation.product_recommendation_agent import ProductRecommendationAgent
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-
-
-def get_workflow(request: Request) -> StateGraph:
-    """Dependency provider for workflow.
-    
-    Returns the compiled workflow from app state.
-    The workflow is created once at server startup with all dependencies injected.
-    
-    Args:
-        request: FastAPI request (provides access to app.state)
-        
-    Returns:
-        Compiled StateGraph with dependencies already baked in
-    """
-    return request.app.state.workflow
-
-
 
 
 @router.post(
@@ -51,26 +33,26 @@ def get_workflow(request: Request) -> StateGraph:
     
     Implementation:
     - Uses Databricks vector search for semantic product retrieval
-    - Direct tool orchestration (LangChain, LangGraph-ready architecture)
+    - LangGraph workflow with injected dependencies
     - LLM reasoning for selection and ranking
     
-    **Architecture:** Simple and predictable flow, ready for LangGraph migration when needed.
+    **Architecture:** DI Container pattern following joke_agent architecture.
     **Authentication:** Requires Bearer token in Authorization header.
     """,
     tags=["Recommendations"],
 )
+@inject
 async def recommend_products_endpoint(
     request: Request,
     body: RecommendProductsRequest,
-    api_key: Annotated[str, Depends(verify_api_key)],
-    workflow: Annotated[StateGraph, Depends(get_workflow)],
+    agent: ProductRecommendationAgent = Depends(Provide[Container.agent]),
 ) -> RecommendProductsResponse:
-    """Recommend products endpoint - maps 1:1 to recommend_products agent.
+    """Recommend products endpoint - maps 1:1 to ProductRecommendationAgent.
 
     Args:
         request: FastAPI request (for trace_id)
         body: Request payload with article, question, and k
-        api_key: Validated API key from Bearer token
+        agent: Injected ProductRecommendationAgent from DI container
 
     Returns:
         List of recommended products with reasoning
@@ -93,26 +75,24 @@ async def recommend_products_endpoint(
     start_time = time.time()
 
     try:
-        # Invoke agent (LangGraph workflow) - returns Pydantic AgentOutput
-        # Workflow injected by FastAPI Depends()
-        agent_output = await recommend_products(
+        # Invoke agent - returns Pydantic AgentOutput
+        agent_output = await agent.invoke(
             article=body.article,
             question=body.question,
             k=body.k,
+            verticals=body.product_types or ["activities", "books", "articles"],
+            customer_uuid=body.customer_uuid,
             trace_id=trace_id,
-            verticals=body.product_types,  # Map product_types to verticals
-            customer_uuid=body.customer_uuid,  # From request body
-            workflow=workflow,  # Injected dependency
         )
 
         # Transform grouped results to API response format
         verticals_searched = body.product_types or ["activities", "books", "articles"]
-        
+
         results_by_vertical = []
         for vertical in verticals_searched:
             vertical_products = agent_output.grouped_results.get(vertical, [])
             error = agent_output.errors.get(vertical)
-            
+
             # Convert each product dict to ProductRecommendation
             products = [
                 ProductRecommendation(
@@ -126,7 +106,7 @@ async def recommend_products_endpoint(
                 )
                 for p in vertical_products
             ]
-            
+
             results_by_vertical.append(
                 VerticalResults(
                     vertical=vertical,
@@ -175,6 +155,7 @@ async def recommend_products_endpoint(
 
         raise HTTPException(
             status_code=status_code,
-            detail=error_message if isinstance(e, AgentException) else f"Failed to generate recommendations: {str(e)}",
+            detail=error_message
+            if isinstance(e, AgentException)
+            else f"Failed to generate recommendations: {str(e)}",
         )
-

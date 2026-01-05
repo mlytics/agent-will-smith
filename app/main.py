@@ -11,86 +11,65 @@ from fastapi.responses import JSONResponse
 import mlflow
 import structlog
 
-from core.config import config
+from core.container import CoreContainer
 from core.logger import configure_logging
 from core.exceptions import map_exception_to_http_status
 from app.middleware.observability import ObservabilityMiddleware
 from app.gateway.dto.schemas import HealthCheckResponse
 from app.gateway.product_recommendation.routes import router as product_recommendation_router
 
-# Configure logging on application import
-configure_logging(config.log_level)
-
-logger = structlog.get_logger(__name__)
-
-
-def configure_mlflow():
-    """Configure MLFlow for tracking and tracing.
-    
-    Note: Databricks environment variables are now set in Config.model_post_init()
-    """
-    # Enable MLFlow tracing if configured
-    if config.enable_tracing:
-        mlflow.langchain.autolog()
-        logger.info("mlflow_tracing_enabled")
+# Remove global logger to avoid pre-config caching
+# logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup/shutdown events.
-    
-    Initializes dependencies at startup (從小組到大):
-    1. Vector search client (connection pooling)
-    2. More dependencies in future commits
 
-    Args:
-        app: FastAPI application instance
+    Centralized initialization of all infrastructure:
+    1. Logging
+    2. MLflow
+    3. Dependency Injection
     """
-    # Startup
+    # 1. Initialize Logging
+    # config.log_level is now resolved via container or default to info if eager logging needed
+    # Ideally logging is also injected or configured via container
+    core_container = CoreContainer()
+    fastapi_config = core_container.fastapi_config()
+    mlflow_config = core_container.mlflow_config()
+
+    configure_logging(fastapi_config.log_level)
+    logger = structlog.get_logger(__name__)
+
     logger.info(
         "application_starting",
-        app_name=config.app_name,
-        version=config.app_version,
-        environment=config.environment,
+        app_name=fastapi_config.app_name,
+        version=fastapi_config.app_version,
+        environment=fastapi_config.environment,
     )
 
-    configure_mlflow()
-    
-    # Initialize dependencies (從小組到大 - from small to big)
-    logger.info("initializing_dependencies")
-    
-    # Import infrastructure and workflow from agent
-    from agent.product_recommendation.infra.vector_search import get_vector_search_client
-    from agent.product_recommendation.infra.llm_client import get_llm_client
-    from agent.product_recommendation.workflow import create_workflow
-    from agent.product_recommendation.infra.prompts import load_prompt_from_registry
-    from agent.product_recommendation.config import agent_config
-    
-    # 1. Vector search client (小 - small component)
-    vector_client = get_vector_search_client()
-    logger.info("vector_search_client_pooled")
-    
-    # 2. LLM client (小 - small component)
-    llm_client = get_llm_client()
-    logger.info("llm_client_pooled")
-    
-    # 3. Prompt cache (小 - small component)
-    prompt = load_prompt_from_registry(agent_config.prompt_name)
-    logger.info("prompt_cached", prompt_length=len(prompt.text))
-    
-    # 4. Workflow (大 - big component, composed of above with explicit DI)
-    workflow = create_workflow(
-        vector_client=vector_client,
-        llm_client=llm_client,
-    )
-    logger.info("workflow_with_dependencies_ready")
-    
-    # Store workflow in app state for dependency injection
-    app.state.workflow = workflow
+    # 2. Initialize MLflow
+    if mlflow_config.enable_tracing:
+        mlflow.langchain.autolog()
+        logger.info("mlflow_tracing_enabled")
 
-    logger.info("application_ready",
-               port=config.port,
-               log_level=config.log_level)
+    # 3. Initialize DI container (follows joke_agent pattern)
+    logger.info("initializing_di_container")
+
+    from agent.product_recommendation.container import Container
+
+    # Wire auth middleware for dependency injection
+    core_container.wire(modules=["app.middleware.auth"])
+
+    # We pass the core container to the agent container if needed,
+    # but declarative container usage (providers.Container) usually handles instantiation
+    # or we can wire it here.
+
+    # Since agent Container defines `core = providers.Container(CoreContainer)`,
+    # we can override it with our instantiated core_container to share state/singletons.
+    container = Container(core=core_container)
+    container.wire(modules=["app.gateway.product_recommendation.routes"])
+    logger.info("application_ready", port=fastapi_config.port, log_level=fastapi_config.log_level)
 
     yield
 
@@ -98,18 +77,24 @@ async def lifespan(app: FastAPI):
     logger.info("application_shutting_down")
 
 
+# Create temporary container usage for app metadata (eager load)
+# Note: In a pure DI world, we might delay this or load config separately.
+# For now, we instantiate CoreContainer to get metadata.
+_core = CoreContainer()
+_fastapi_config = _core.fastapi_config()
+
 # Create FastAPI application
 app = FastAPI(
-    title=config.app_name,
-    version=config.app_version,
+    title=_fastapi_config.app_name,
+    version=_fastapi_config.app_version,
     description="AI Agent Platform using Databricks vector search and LangChain",
     lifespan=lifespan,
-    docs_url="/docs" if config.environment == "development" else None,
-    redoc_url="/redoc" if config.environment == "development" else None,
+    docs_url="/docs" if _fastapi_config.environment == "development" else None,
+    redoc_url="/redoc" if _fastapi_config.environment == "development" else None,
 )
 
 # Add observability middleware
-app.add_middleware(ObservabilityMiddleware)
+app.add_middleware(ObservabilityMiddleware, environment=_fastapi_config.environment)
 
 
 @app.get("/health", response_model=HealthCheckResponse, tags=["Health"])
@@ -121,8 +106,8 @@ async def health_check():
     """
     return HealthCheckResponse(
         status="healthy",
-        version=config.app_version,
-        environment=config.environment,
+        version=_fastapi_config.app_version,
+        environment=_fastapi_config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -137,28 +122,10 @@ async def readiness_check():
     # TODO: Add checks for Databricks connectivity, vector search availability, etc.
     return HealthCheckResponse(
         status="healthy",
-        version=config.app_version,
-        environment=config.environment,
+        version=_fastapi_config.app_version,
+        environment=_fastapi_config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
-
-
-@app.get("/metrics", tags=["Observability"])
-async def metrics(request: Request):
-    """Basic metrics endpoint for monitoring.
-    
-    Note: For production, use container-level metrics (Prometheus, cAdvisor)
-    for accurate CPU/memory tracking. Request-level metrics are not reliable
-    in async contexts.
-
-    Returns:
-        Basic application metrics
-    """
-    return {
-        "trace_id": getattr(request.state, "trace_id", None),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "healthy",
-    }
 
 
 # Include API routes (protected by auth)
@@ -168,7 +135,7 @@ app.include_router(product_recommendation_router, prefix="/api/v1", dependencies
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors.
-    
+
     Maps all exceptions to appropriate HTTP status codes using the
     exception hierarchy defined in core.exceptions.
 
@@ -180,10 +147,11 @@ async def global_exception_handler(request: Request, exc: Exception):
         JSON error response with trace ID and appropriate status code
     """
     trace_id = getattr(request.state, "trace_id", None)
-    
+
     # Map exception to HTTP status
     status_code, error_message = map_exception_to_http_status(exc)
 
+    logger = structlog.get_logger(__name__)
     logger.error(
         "unhandled_exception",
         trace_id=trace_id,
@@ -198,8 +166,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=status_code,
         content={
             "error": error_message,
-            "detail": str(exc) if config.fastapi.environment == "development" else None,
+            "detail": str(exc) if _fastapi_config.environment == "development" else None,
             "trace_id": trace_id,
         },
     )
-

@@ -1,8 +1,3 @@
-"""FastAPI application configuration.
-
-Configuration for API server, authentication, and observability.
-"""
-
 from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,7 +9,6 @@ class FastAPIConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False,
         extra="ignore",
     )
 
@@ -37,11 +31,3 @@ class FastAPIConfig(BaseSettings):
         default="dev-api-key-replace-in-production",
         description="Bearer token for API authentication",
     )
-
-    # Observability
-    enable_tracing: bool = Field(default=True, description="Enable MLFlow tracing")
-    enable_metrics: bool = Field(default=True, description="Enable metrics collection")
-    metrics_interval_seconds: int = Field(
-        default=60, description="Metrics collection interval"
-    )
-
