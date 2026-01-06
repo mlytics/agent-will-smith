@@ -4,19 +4,17 @@ Main application setup with middleware, routes, and lifecycle management.
 Follows guideline: "One controller of flow" - FastAPI handles HTTP orchestration.
 """
 
-from datetime import datetime, timezone
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import mlflow
 import structlog
 
-from core.container import CoreContainer
+from core.core_container import CoreContainer
 from core.logger import configure_logging
 from core.exceptions import map_exception_to_http_status
 from app.middleware.observability_middleware import ObservabilityMiddleware
 from app.middleware.auth_middleware import AuthMiddleware
-from app.api.dto.schemas import HealthCheckResponse
+from app.api.system.routes import router as system_router
 from app.api.product_recommendation.routes import router as product_recommendation_router
 
 
@@ -61,6 +59,9 @@ def create_app() -> FastAPI:
     # Wire auth middleware
     _core_container.wire(modules=["app.middleware.auth_middleware"])
 
+    # Wire system routes (health/ready endpoints)
+    _core_container.wire(modules=["app.api.system.routes"])
+
     from agent.product_recommendation.container import Container
 
     # Instantiate agent container with core dependency
@@ -82,6 +83,10 @@ def create_app() -> FastAPI:
     app.add_middleware(AuthMiddleware, excluded_paths=["/health", "/ready"])
 
     # Routers
+    # System routes (no prefix - root level)
+    app.include_router(system_router, dependencies=[])
+
+    # Agent routes
     app.include_router(product_recommendation_router, prefix="/api/v1", dependencies=[])
 
     logger.info("application_ready", port=fastapi_config.port, log_level=fastapi_config.log_level)
@@ -91,30 +96,6 @@ def create_app() -> FastAPI:
 
 # Create the app (this runs the init logic)
 app = create_app()
-
-
-@app.get("/health", response_model=HealthCheckResponse, tags=["Health"])
-async def health_check():
-    """Health check endpoint."""
-    fastapi_config = _core_container.fastapi_config()
-    return HealthCheckResponse(
-        status="healthy",
-        version=fastapi_config.app_version,
-        environment=fastapi_config.environment,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-
-
-@app.get("/ready", response_model=HealthCheckResponse, tags=["Health"])
-async def readiness_check():
-    """Readiness check endpoint."""
-    fastapi_config = _core_container.fastapi_config()
-    return HealthCheckResponse(
-        status="healthy",
-        version=fastapi_config.app_version,
-        environment=fastapi_config.environment,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
 
 
 @app.exception_handler(Exception)

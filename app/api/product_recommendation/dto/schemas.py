@@ -5,7 +5,7 @@ All API boundaries use Pydantic models for validation and documentation.
 """
 
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from agent.product_recommendation.constants import VERTICALS
 
 

@@ -1,7 +1,6 @@
-"""Shared API schemas.
+"""System API schemas.
 
-Common request/response schemas used across multiple agents.
-Agent-specific schemas live in their respective gateway folders.
+Common system-level request/response schemas.
 """
 
 from typing import Literal
@@ -15,11 +14,3 @@ class HealthCheckResponse(BaseModel):
     version: str = Field(..., description="Application version")
     environment: str = Field(..., description="Environment name")
     timestamp: str = Field(..., description="Current timestamp (ISO 8601)")
-
-
-class ErrorResponse(BaseModel):
-    """Standard error response schema."""
-
-    error: str = Field(..., description="Error message")
-    detail: str | None = Field(None, description="Detailed error information (dev only)")
-    trace_id: str | None = Field(None, description="Trace ID for debugging")

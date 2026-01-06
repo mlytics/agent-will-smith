@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from dependency_injector.wiring import inject, Provide
 
-from core.container import CoreContainer
+from core.core_container import CoreContainer
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

@@ -6,7 +6,7 @@ Uses dependency_injector for declarative DI following the joke_agent pattern.
 from dependency_injector import containers, providers
 import structlog
 
-from core.container import CoreContainer
+from core.core_container import CoreContainer
 from agent.product_recommendation.config import agent_config
 from agent.product_recommendation.infra.llm_client import LLMClient
 from agent.product_recommendation.infra.vector_search import VectorSearchClient
