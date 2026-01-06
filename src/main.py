@@ -129,24 +129,15 @@ app = create_app()
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
-    trace_id = getattr(request.state, "trace_id", None)
-    status_code, error_message = map_exception_to_http_status(exc)
+    # trace_id = getattr(request.state, "trace_id", None)
+    # status_code, error_message = map_exception_to_http_status(exc)
 
     logger = structlog.get_logger(__name__)
     logger.error(
-        "unhandled_exception",
-        trace_id=trace_id,
-        error=str(exc),
-        error_type=type(exc).__name__,
-        status_code=status_code,
-        path=request.url.path,
-        exc_info=True,
+        "shit happens",
+        exc_info=(type(exc), exc, exc.__traceback__) 
     )
 
     return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": error_message,
-            "trace_id": trace_id,
-        },
+        status_code=500,
     )

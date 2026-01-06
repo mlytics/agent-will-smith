@@ -7,6 +7,7 @@ These endpoints do not require authentication.
 from datetime import datetime, timezone
 from fastapi import APIRouter
 from dependency_injector.wiring import inject, Provide
+import structlog
 
 from src.core.core_container import CoreContainer
 from src.app.api.system.dto.schemas import HealthCheckResponse
@@ -24,6 +25,9 @@ async def health_check(
     Returns basic service health status without authentication.
     Used by load balancers and monitoring systems.
     """
+
+    raise Exception("test exception")
+
     return HealthCheckResponse(
         status="healthy",
         version=fastapi_config.app_version,

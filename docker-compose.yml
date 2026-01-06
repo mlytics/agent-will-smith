@@ -10,7 +10,7 @@ services:
     volumes:
       # Mount source code for development (hot reload)
       - ./src:/app/src
-    command: python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --log-level critical
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

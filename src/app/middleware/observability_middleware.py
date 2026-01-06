@@ -1,74 +1,63 @@
-"""Observability middleware for structured logging and metrics.
+"""
+Observability middleware for structured logging and metrics (pure ASGI).
 
 Implements:
-- Structured JSON logging with automatic context propagation
+- Structured JSON logging with automatic context propagation (structlog contextvars)
 - Request/response tracking with trace IDs
-- Exception handling with stack traces
-
-Note: Logging is configured centrally in core/logger.py
+- Exception logging with stack traces (optional: only for unhandled)
+- Adds X-Trace-ID response header
 """
 
 import time
 import uuid
 import structlog
-from typing import Callable
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from structlog.contextvars import clear_contextvars, bind_contextvars
 
 
-class ObservabilityMiddleware(BaseHTTPMiddleware):
-    """Middleware for request/response logging and metrics collection."""
-
+class ObservabilityMiddleware:
     def __init__(self, app):
-        super().__init__(app)
+        self.app = app
         self.logger = structlog.get_logger(__name__)
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Process request with observability instrumentation.
-
-        Args:
-            request: Incoming HTTP request
-            call_next: Next middleware/route handler
-
-        Returns:
-            HTTP response with trace ID header
-        """
-        # Clear any previous context to prevent leakage between requests
+    async def __call__(self, scope, receive, send):
         clear_contextvars()
 
-        # Generate trace ID for request tracking
         trace_id = str(uuid.uuid4())
-        request.state.trace_id = trace_id
 
-        # Bind context for automatic propagation across all logs in this request
+        # Put it on scope.state-like storage (Starlette uses scope["state"])
+        # so handlers can read it if they want.
+        scope.setdefault("state", {})
+        scope["state"]["trace_id"] = trace_id
+
+        # Bind common context. Client is (host, port) in ASGI scope.
+        client = scope.get("client")
+        client_host = client[0] if client else None
+
         bind_contextvars(
             trace_id=trace_id,
-            method=request.method,
-            path=request.url.path,
-            client_host=request.client.host if request.client else None,
+            method=scope.get("method"),
+            path=scope.get("path"),
+            client_host=client_host,
         )
 
-        # Capture start time
-        start_time = time.time()
+        start = time.perf_counter()
 
         self.logger.debug("request started")
 
-        # Process request
-        response = await call_next(request)
+        status_code = None
+        async def send_wrapper(message):
+            nonlocal status_code
 
-        # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
 
-        # Log successful request (trace_id auto-included via contextvars)
+
+        await self.app(scope, receive, send_wrapper)
+
+        dur_ms = (time.perf_counter() - start) * 1000
         self.logger.debug(
             "request completed",
-            status_code=response.status_code,
-            duration_ms=round(duration_ms, 2),
+            status_code=status_code,
+            duration_ms=round(dur_ms, 2),
         )
-
-        # Add trace ID to response header
-        response.headers["X-Trace-ID"] = trace_id
-
-        return response

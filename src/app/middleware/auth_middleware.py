@@ -1,57 +1,58 @@
-"""Authentication middleware for Bearer token validation.
+"""Authentication middleware for Bearer token validation (pure ASGI)."""
 
-Follows guideline: "Keep business rules out of prompts" - auth logic in code, not prompts.
-"""
+from __future__ import annotations
 
-from typing import List, Optional
-from fastapi import Request, status
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from typing import Iterable, Optional
+from fastapi import status
+from starlette.responses import JSONResponse
 from dependency_injector.wiring import inject, Provide
+from starlette.datastructures import Headers
 
 from src.core.core_container import CoreContainer
 
+class AuthMiddleware:
+    """Authentication middleware using Dependency Injection (pure ASGI).
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Authentication middleware using Dependency Injection.
-
-    Enforces Bearer token authentication on all routes except excluded ones.
+    Enforces Bearer token authentication on all HTTP routes except excluded ones.
     """
 
     @inject
     def __init__(
         self,
         app,
-        excluded_paths: Optional[List[str]] = None,
+        excluded_paths: Optional[Iterable[str]] = None,
         api_key: str = Provide[CoreContainer.fastapi_config.provided.api_key],
     ):
-        """Initialize middleware with injected API key and excluded paths."""
-        super().__init__(app)
+        self.app = app
         self.api_key = api_key
-        self.excluded_paths = excluded_paths or []
+        self.excluded_paths = set(excluded_paths or [])
 
-    async def dispatch(self, request: Request, call_next):
-        """Process request and verify API key if not excluded."""
-        # 1. Check if path is excluded (bypass)
-        if request.url.path in self.excluded_paths:
-            return await call_next(request)
-            
-        # 2. Verify Authentication
-        auth_header = request.headers.get("Authorization")
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path") or ""
+        if path in self.excluded_paths:
+            await self.app(scope, receive, send)
+            return
 
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return JSONResponse(
+        headers = Headers(scope=scope)
+        auth = headers.get("authorization")
+
+        if not auth or not auth.startswith("Bearer "):
+            res = JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Missing or invalid Authorization header"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
+            await res(scope, receive, send)
+            return
 
-        token = auth_header.split(" ")[1]
+        token = auth.split(" ", 1)[1].strip()
         if token != self.api_key:
-            return JSONResponse(
+            res = JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Invalid API key"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
+            await res(scope, receive, send)
+            return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
