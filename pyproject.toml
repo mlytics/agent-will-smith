@@ -27,6 +27,9 @@ dependencies = [
     
     # Dependency Injection
     "dependency-injector>=4.48.3",
+
+    # Versioning
+    "semver>=3.0.4",
 ]
 
 [build-system]

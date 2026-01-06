@@ -60,25 +60,26 @@ def create_app() -> FastAPI:
     # 1. Configuration
     fastapi_config = _core_container.fastapi_config()
     mlflow_config = _core_container.mlflow_config()
+    log_config = _core_container.log_config()
 
     # 2. Logging
-    configure_logging(fastapi_config.log_level, fastapi_config.environment)
+    configure_logging(log_config)
     logger = structlog.get_logger(__name__)
 
     logger.info(
         "application_starting",
-        app_name=fastapi_config.app_name,
-        version=fastapi_config.app_version,
-        environment=fastapi_config.environment,
+        fastapi_config=fastapi_config,
+        mlflow_config=mlflow_config,
+        log_config=log_config,
     )
 
     # 3. MLflow
     if mlflow_config.enable_tracing:
         mlflow.langchain.autolog()
-        logger.info("mlflow_tracing_enabled")
+        logger.info("mlflow tracing enabled")
 
     # 4. DI Container & Wiring
-    logger.info("initializing_di_container")
+    logger.info("initializing di container")
 
     # Wire auth middleware
     _core_container.wire(modules=["src.app.middleware.auth_middleware"])
@@ -98,16 +99,13 @@ def create_app() -> FastAPI:
         title=fastapi_config.app_name,
         version=fastapi_config.app_version,
         description="AI Agent Platform using Databricks vector search and LangChain",
-        docs_url="/docs" if fastapi_config.environment == "development" else None,
-        redoc_url="/redoc" if fastapi_config.environment == "development" else None,
+        docs_url="/docs" if fastapi_config.enable_docs else None,
+        redoc_url="/redoc" if fastapi_config.enable_docs else None,
     )
 
     # Middleware
-    app.add_middleware(
-        ObservabilityMiddleware,
-        environment=fastapi_config.environment,
-    )
-    app.add_middleware(AuthMiddleware, excluded_paths=["/health", "/ready"])
+    app.add_middleware(ObservabilityMiddleware)
+    app.add_middleware(AuthMiddleware, excluded_paths=["/health", "/ready", "/docs", "/redoc", "/openapi.json"])
 
     # Routers
     # System routes (no prefix - root level)
@@ -119,7 +117,7 @@ def create_app() -> FastAPI:
     # Setup graceful shutdown handlers
     setup_signal_handlers(app)
 
-    logger.info("application_ready", port=fastapi_config.port, log_level=fastapi_config.log_level)
+    logger.info("application_ready")
 
     return app
 
@@ -131,7 +129,6 @@ app = create_app()
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
-    fastapi_config = _core_container.fastapi_config()
     trace_id = getattr(request.state, "trace_id", None)
     status_code, error_message = map_exception_to_http_status(exc)
 
@@ -150,7 +147,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=status_code,
         content={
             "error": error_message,
-            "detail": str(exc) if fastapi_config.environment == "development" else None,
             "trace_id": trace_id,
         },
     )

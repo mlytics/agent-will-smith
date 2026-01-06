@@ -12,5 +12,4 @@ class HealthCheckResponse(BaseModel):
 
     status: Literal["healthy", "unhealthy"] = Field(..., description="Service health status")
     version: str = Field(..., description="Application version")
-    environment: str = Field(..., description="Environment name")
     timestamp: str = Field(..., description="Current timestamp (ISO 8601)")

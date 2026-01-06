@@ -27,7 +27,6 @@ async def health_check(
     return HealthCheckResponse(
         status="healthy",
         version=fastapi_config.app_version,
-        environment=fastapi_config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -45,6 +44,5 @@ async def readiness_check(
     return HealthCheckResponse(
         status="healthy",
         version=fastapi_config.app_version,
-        environment=fastapi_config.environment,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )

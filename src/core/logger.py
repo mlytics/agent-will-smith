@@ -10,23 +10,16 @@ This module configures structured logging with:
 import logging
 import structlog
 
+from src.core.config.log_config import LogConfig
 
-def configure_logging(log_level: str = "INFO", environment: str = "production") -> None:
+
+def configure_logging(log_config: LogConfig) -> None:
     """Configure structlog for the application.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         environment: Application environment (development, staging, production)
     """
-    # Map string log level to logging constant
-    level_map = {
-        "DEBUG": logging.DEBUG,
-        "INFO": logging.INFO,
-        "WARNING": logging.WARNING,
-        "ERROR": logging.ERROR,
-        "CRITICAL": logging.CRITICAL,
-    }
-    log_level_int = level_map.get(log_level.upper(), logging.INFO)
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,  # Auto-merge request context
@@ -44,8 +37,7 @@ def configure_logging(log_level: str = "INFO", environment: str = "production") 
         structlog.processors.format_exc_info,
     ]
 
-    # Select renderer based on environment
-    if environment == "development":
+    if log_config.log_format == "pretty":
         # Pretty printing for local development
         renderer = structlog.dev.ConsoleRenderer(colors=True)
     else:
@@ -55,7 +47,7 @@ def configure_logging(log_level: str = "INFO", environment: str = "production") 
     # Configure structlog
     structlog.configure(
         processors=shared_processors + [renderer],
-        wrapper_class=structlog.make_filtering_bound_logger(log_level_int),
+        wrapper_class=structlog.make_filtering_bound_logger(log_config.log_level_int),
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
@@ -64,14 +56,5 @@ def configure_logging(log_level: str = "INFO", environment: str = "production") 
     # Configure stdlib logging to use structlog
     logging.basicConfig(
         format="%(message)s",
-        level=log_level_int,
+        level=log_config.log_level_int,
     )
-
-    # Suppress verbose third-party library logs
-    # These libraries are too chatty at DEBUG level
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("databricks").setLevel(logging.WARNING)
-    logging.getLogger("mlflow").setLevel(logging.WARNING)
-    logging.getLogger("openai").setLevel(logging.WARNING)

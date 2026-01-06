@@ -1,7 +1,6 @@
-from typing import Literal
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from semver import Version
 
 class FastAPIConfig(BaseSettings):
     """FastAPI server and application configuration."""
@@ -9,25 +8,22 @@ class FastAPIConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",
     )
 
-    # Application
     app_name: str = Field(default="agent-will-smith", description="Application name")
     app_version: str = Field(default="0.1.0", description="Application version")
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development", description="Environment name"
-    )
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO", description="Logging level"
-    )
-
-    # API Server
+    enable_docs: bool = Field(default=False, description="Enable API documentation")
     port: int = Field(default=8000, description="API port")
-    reload: bool = Field(default=False, description="Enable auto-reload (dev only)")
-
-    # Authentication
     api_key: str = Field(
         default="dev-api-key-replace-in-production",
         description="Bearer token for API authentication",
     )
+
+
+    @field_validator("app_version", mode="after")
+    @classmethod
+    def app_version_is_valid(cls, v):
+        if not Version.is_valid(v):
+            raise ValueError(f"Invalid application version: {v}")
+        return v
+

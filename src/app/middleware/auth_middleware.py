@@ -35,13 +35,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # 1. Check if path is excluded (bypass)
         if request.url.path in self.excluded_paths:
             return await call_next(request)
-
-        # 2. Also bypass documentation routes if not explicitly blocked
-        # (Usually desirable to keep docs public or separate, adjusting as needed)
-        if request.url.path in ["/docs", "/redoc", "/openapi.json"]:
-            return await call_next(request)
-
-        # 3. Verify Authentication
+            
+        # 2. Verify Authentication
         auth_header = request.headers.get("Authorization")
 
         if not auth_header or not auth_header.startswith("Bearer "):
