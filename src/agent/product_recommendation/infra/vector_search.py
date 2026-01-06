@@ -8,7 +8,7 @@ from databricks.vector_search.client import VectorSearchClient as DatabricksVect
 import structlog
 
 from src.agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
-from src.core.exceptions import VectorSearchError
+from src.core.exceptions import UpstreamError
 
 
 class VectorSearchClient:
@@ -161,8 +161,15 @@ class VectorSearchClient:
                 error=str(e),
                 exc_info=True,
             )
-            raise VectorSearchError(
-                f"Vector search failed for {product_type} in {index_name}: {str(e)}"
+            raise UpstreamError(
+                f"Vector search failed for {product_type}",
+                details={
+                    "provider": "databricks_vector_search",
+                    "operation": "similarity_search",
+                    "index_name": index_name,
+                    "product_type": product_type,
+                    "error": str(e),
+                }
             ) from e
 
     def _get_columns_for_product_type(
@@ -220,7 +227,15 @@ class VectorSearchClient:
 
         if not isinstance(results, dict):
             self.logger.error("unexpected_response_type", response_type=type(results).__name__)
-            raise VectorSearchError(f"Unexpected response type: {type(results).__name__}")
+            raise UpstreamError(
+                "Unexpected vector search response format",
+                details={
+                    "provider": "databricks_vector_search",
+                    "operation": "parse_results",
+                    "expected_type": "dict",
+                    "actual_type": type(results).__name__,
+                }
+            )
 
         result_data = results.get("result", {})
         data_array = result_data.get("data_array", [])
@@ -236,28 +251,24 @@ class VectorSearchClient:
             column_names = columns
 
         for row_data in data_array:
-            try:
-                if isinstance(row_data, list):
-                    # Extract score (last element) if present
-                    if len(row_data) > len(column_names):
-                        score = row_data[-1]
-                        data_values = row_data[:-1]
-                    else:
-                        score = 0.0
-                        data_values = row_data
-                    result_dict = dict(zip(column_names, data_values))
-                    result_dict["score"] = score
-                elif isinstance(row_data, dict):
-                    result_dict = row_data
+            if isinstance(row_data, list):
+                # Extract score (last element) if present
+                if len(row_data) > len(column_names):
+                    score = row_data[-1]
+                    data_values = row_data[:-1]
                 else:
-                    continue
-
-                product = self._parse_result_row(result_dict, product_type)
-                products.append(product)
-
-            except Exception as e:
-                self.logger.error("failed_to_parse_row", error=str(e), exc_info=True)
+                    score = 0.0
+                    data_values = row_data
+                result_dict = dict(zip(column_names, data_values))
+                result_dict["score"] = score
+            elif isinstance(row_data, dict):
+                result_dict = row_data
+            else:
                 continue
+
+            # Let parsing failures raise immediately
+            product = self._parse_result_row(result_dict, product_type)
+            products.append(product)
 
         return products
 

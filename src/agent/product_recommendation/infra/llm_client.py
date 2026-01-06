@@ -46,12 +46,11 @@ class LLMClient:
 
         Returns:
             The generated text response
+
+        Raises:
+            Various exceptions from LangChain (TimeoutError, etc.)
         """
-        try:
-            self.logger.info("llm_invoke_messages", message_count=len(messages))
-            response = self._llm.invoke(messages)
-            self.logger.info("llm_response", response_length=len(response.content))
-            return response.content.strip()
-        except Exception as e:
-            self.logger.error("llm_failed", error=str(e))
-            raise Exception(f"LLM invocation failed: {str(e)}") from e
+        self.logger.info("llm_invoke_messages", message_count=len(messages))
+        response = self._llm.invoke(messages)
+        self.logger.info("llm_response", response_length=len(response.content))
+        return response.content.strip()

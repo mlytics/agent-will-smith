@@ -13,7 +13,25 @@ import sys
 
 from src.core.core_container import CoreContainer
 from src.core.logger import configure_logging
-from src.core.exceptions import map_exception_to_http_status
+from src.core.exceptions import (
+    AgentException,
+    BadRequestError,
+    DomainValidationError,
+    UnauthorizedError,
+    ForbiddenError,
+    NotFoundError,
+    ConflictError,
+    RateLimitedError,
+    AgentStateError,
+    ToolExecutionError,
+    AgentTimeoutError,
+    AgentCancelledError,
+    UpstreamError,
+    UpstreamTimeoutError,
+    UpstreamRateLimitError,
+    PromptLoadError,
+    NoResultsFoundError,
+)
 from src.app.middleware.observability_middleware import ObservabilityMiddleware
 from src.app.middleware.auth_middleware import AuthMiddleware
 from src.app.api.system.routes import router as system_router
@@ -126,18 +144,94 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+def _map_agent_exception_to_status(exc: AgentException) -> int:
+    """Map AgentException to HTTP status code."""
+    # Client errors (4xx)
+    if isinstance(exc, BadRequestError):
+        return 400
+    if isinstance(exc, UnauthorizedError):
+        return 401
+    if isinstance(exc, ForbiddenError):
+        return 403
+    if isinstance(exc, (NotFoundError, NoResultsFoundError)):
+        return 404
+    if isinstance(exc, AgentCancelledError):
+        return 408
+    if isinstance(exc, ConflictError):
+        return 409
+    if isinstance(exc, DomainValidationError):
+        return 422
+    if isinstance(exc, (RateLimitedError, UpstreamRateLimitError)):
+        return 429
+
+    # Agent state errors (context-dependent)
+    if isinstance(exc, AgentStateError):
+        return 409 if exc.conflict else 500
+
+    # Agent runtime errors
+    if isinstance(exc, AgentTimeoutError):
+        return 504
+    if isinstance(exc, ToolExecutionError):
+        return 502 if exc.details.get("is_external", False) else 500
+
+    # Upstream errors (5xx)
+    if isinstance(exc, (UpstreamError, PromptLoadError)):
+        return 502
+    if isinstance(exc, UpstreamTimeoutError):
+        return 504
+
+    # Fallback
+    return 500
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler."""
-    # trace_id = getattr(request.state, "trace_id", None)
-    # status_code, error_message = map_exception_to_http_status(exc)
-
+    """Global exception handler - maps all exceptions to HTTP responses."""
     logger = structlog.get_logger(__name__)
+    trace_id = getattr(request.state, "trace_id", "unknown")
+
+    # Determine status code and error details
+    if isinstance(exc, AgentException):
+        status_code = _map_agent_exception_to_status(exc)
+        error_message = exc.message
+        error_details = exc.details
+    elif isinstance(exc, ValueError):
+        status_code = 400
+        error_message = f"Invalid value: {str(exc)}"
+        error_details = {}
+    elif isinstance(exc, KeyError):
+        status_code = 400
+        error_message = f"Missing required field: {str(exc)}"
+        error_details = {}
+    elif isinstance(exc, TimeoutError):
+        status_code = 504
+        error_message = "Request timed out"
+        error_details = {}
+    else:
+        # Unknown exceptions
+        status_code = 500
+        error_message = "Internal server error"
+        error_details = {}
+
+    # Log with full context
     logger.error(
-        "shit happens",
-        exc_info=(type(exc), exc, exc.__traceback__) 
+        "exception_handled",
+        trace_id=trace_id,
+        status_code=status_code,
+        error_type=type(exc).__name__,
+        error_message=error_message,
+        error_details=error_details,
+        exc_info=exc,
     )
 
+    # Return JSON response
+    response_body = {
+        "error": error_message,
+        "trace_id": trace_id,
+        "details": error_details if error_details else None,
+    }
+
     return JSONResponse(
-        status_code=500,
+        status_code=status_code,
+        content=response_body,
     )

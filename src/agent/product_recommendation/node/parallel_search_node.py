@@ -15,7 +15,7 @@ from src.agent.product_recommendation.schemas import (
 from src.agent.product_recommendation.node.query_builder import QueryBuilder
 from src.agent.product_recommendation.infra.vector_search import VectorSearchClient
 from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
-from src.core.exceptions import VectorSearchTimeout, VectorSearchError
+from src.core.exceptions import UpstreamTimeoutError, UpstreamError
 
 # Timeout per vertical search (5 seconds)
 VECTOR_SEARCH_TIMEOUT_SECONDS = 5.0
@@ -208,8 +208,15 @@ class ParallelSearchNode:
                 timeout=timeout,
                 exc_info=True,
             )
-            # Use current trace_id from context if relevant logs are needed, relying on structlog context
-            raise VectorSearchTimeout(f"Search timeout for {vertical} after {timeout}s") from e
+            raise UpstreamTimeoutError(
+                f"Vector search timeout for {vertical}",
+                details={
+                    "provider": "databricks_vector_search",
+                    "operation": "similarity_search",
+                    "vertical": vertical,
+                    "timeout_seconds": timeout,
+                }
+            ) from e
 
         except Exception as e:
             self.logger.error(
@@ -219,4 +226,12 @@ class ParallelSearchNode:
                 error_type=type(e).__name__,
                 exc_info=True,
             )
-            raise VectorSearchError(f"Search failed for {vertical}: {str(e)}") from e
+            raise UpstreamError(
+                f"Vector search failed for {vertical}",
+                details={
+                    "provider": "databricks_vector_search",
+                    "operation": "similarity_search",
+                    "vertical": vertical,
+                    "error": str(e),
+                }
+            ) from e

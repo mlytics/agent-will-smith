@@ -26,8 +26,6 @@ async def health_check(
     Used by load balancers and monitoring systems.
     """
 
-    raise Exception("test exception")
-
     return HealthCheckResponse(
         status="healthy",
         version=fastapi_config.app_version,

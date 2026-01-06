@@ -15,6 +15,7 @@ from functools import lru_cache
 
 from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
 from src.agent.product_recommendation.schemas import PromptContent
+from src.core.exceptions import BadRequestError, UpstreamError, UpstreamTimeoutError
 
 
 @lru_cache(maxsize=10)
@@ -56,23 +57,46 @@ def load_prompt_from_registry(
 
     # Validate prompt path format
     if not prompt_path.startswith("prompts:/"):
-        raise ValueError(
-            f"Invalid prompt path format: {prompt_path}. "
-            f"Must start with 'prompts:/' (e.g., prompts:/catalog.schema.name/version)"
+        raise BadRequestError(
+            f"Invalid prompt path format: {prompt_path}",
+            details={
+                "prompt_path": prompt_path,
+                "expected_format": "prompts:/catalog.schema.name/version",
+            }
         )
 
     logger.info("loading_prompt_from_mlflow", prompt_path=prompt_path)
 
-    # Use MLflow's dedicated prompt loading API
-    # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
-    prompt = mlflow.genai.load_prompt(prompt_path)
+    try:
+        # Use MLflow's dedicated prompt loading API
+        # Format: prompts:/catalog.schema.prompt_name/version (single slash!)
+        prompt = mlflow.genai.load_prompt(prompt_path)
 
-    # This is the standard way to extract text from MLflow prompt objects
-    prompt_text = prompt.format()
+        # This is the standard way to extract text from MLflow prompt objects
+        prompt_text = prompt.format()
 
-    logger.info(
-        "prompt_loaded_successfully", prompt_path=prompt_path, prompt_length=len(prompt_text)
-    )
+        logger.info(
+            "prompt_loaded_successfully", prompt_path=prompt_path, prompt_length=len(prompt_text)
+        )
+    except TimeoutError as e:
+        raise UpstreamTimeoutError(
+            "MLflow prompt load timed out",
+            details={
+                "provider": "mlflow",
+                "operation": "load_prompt",
+                "prompt_path": prompt_path,
+            }
+        ) from e
+    except Exception as e:
+        raise UpstreamError(
+            "Failed to load prompt from MLflow",
+            details={
+                "provider": "mlflow",
+                "operation": "load_prompt",
+                "prompt_path": prompt_path,
+                "error": str(e),
+            }
+        ) from e
 
     # Validate with Pydantic
     prompt_content = PromptContent(text=prompt_text, source=prompt_path)

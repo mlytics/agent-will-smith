@@ -8,7 +8,7 @@ import structlog
 from src.agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
 from src.agent.product_recommendation.infra.llm_client import LLMClient
 from src.agent.product_recommendation.infra.prompts import load_prompt_from_registry
-from src.core.exceptions import IntentAnalysisError, LLMServiceError, LLMServiceTimeout
+from src.core.exceptions import DomainValidationError, UpstreamError, UpstreamTimeoutError, ToolExecutionError
 
 
 class IntentAnalysisNode:
@@ -37,9 +37,10 @@ class IntentAnalysisNode:
             IntentAnalysisOutput with intent string
 
         Raises:
-            IntentAnalysisError: If intent analysis fails
-            LLMServiceError: If LLM service has issues
-            LLMServiceTimeout: If LLM call times out
+            DomainValidationError: If LLM returns empty intent
+            UpstreamError: If LLM service has issues
+            UpstreamTimeoutError: If LLM call times out
+            ToolExecutionError: If intent analysis fails unexpectedly
         """
 
         self.logger.info("intent_analysis_started")
@@ -82,7 +83,13 @@ Provide a concise intent summary (2-3 sentences max)."""
             )
 
             if not intent:
-                raise IntentAnalysisError("LLM returned empty intent")
+                raise DomainValidationError(
+                    "LLM returned empty intent",
+                    details={
+                        "validation": "empty_response",
+                        "expected": "non-empty intent string",
+                    }
+                )
 
             self.logger.info("intent_analysis_completed", intent_length=len(intent))
 
@@ -90,18 +97,32 @@ Provide a concise intent summary (2-3 sentences max)."""
 
         except TimeoutError as e:
             self.logger.error("intent_analysis_timeout", error=str(e), exc_info=True)
-            raise LLMServiceTimeout(f"Intent analysis timed out: {str(e)}") from e
+            raise UpstreamTimeoutError(
+                "Intent analysis timed out",
+                details={
+                    "provider": "databricks_llm",
+                    "operation": "chat_completion",
+                }
+            ) from e
+
+        except (DomainValidationError, UpstreamError, UpstreamTimeoutError):
+            # Let specific exceptions bubble up
+            raise
 
         except Exception as e:
+            # Catch truly unexpected errors
             self.logger.error(
                 "intent_analysis_failed",
                 error=str(e),
                 error_type=type(e).__name__,
                 exc_info=True,
             )
-
-            error_msg = str(e).lower()
-            if "endpoint" in error_msg or "service" in error_msg or "connection" in error_msg:
-                raise LLMServiceError(f"LLM service error: {str(e)}") from e
-
-            raise IntentAnalysisError(f"Intent analysis failed: {str(e)}") from e
+            raise ToolExecutionError(
+                "Intent analysis failed unexpectedly",
+                details={
+                    "tool_name": "intent_analysis",
+                    "is_external": False,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            ) from e
