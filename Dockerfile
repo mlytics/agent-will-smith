@@ -2,7 +2,7 @@
 # Optimized for production deployment with uv
 
 # Stage 1: Builder
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -17,7 +17,7 @@ COPY pyproject.toml uv.lock* README.md ./
 RUN uv sync --frozen --no-dev --no-editable
 
 # Stage 2: Runtime
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
@@ -34,9 +34,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=builder /build/.venv /app/.venv
 
 # Copy application code
-COPY app/ ./app/
-COPY agent/ ./agent/
-COPY core/ ./core/
+COPY src/ ./src/
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
@@ -55,5 +53,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 8000
 
 # Run with uvicorn (using python -m to use the installed module)
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
