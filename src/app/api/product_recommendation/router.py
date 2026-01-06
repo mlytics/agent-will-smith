@@ -16,7 +16,7 @@ from src.app.api.product_recommendation.dto.schemas import (
 )
 from dependency_injector.wiring import inject, Provide
 from src.agent.product_recommendation.container import Container
-from src.agent.product_recommendation.product_recommendation_agent import ProductRecommendationAgent
+from src.agent.product_recommendation.agent import Agent
 
 router = APIRouter()
 
@@ -42,15 +42,15 @@ router = APIRouter()
 async def recommend_products_endpoint(
     request: Request,
     body: RecommendProductsRequest,
-    agent: ProductRecommendationAgent = Depends(Provide[Container.agent]),
+    agent: Agent = Depends(Provide[Container.agent]),
     logger: structlog.BoundLogger = Depends(Provide[Container.logger]),
 ) -> RecommendProductsResponse:
-    """Recommend products endpoint - maps 1:1 to ProductRecommendationAgent.
+    """Recommend products endpoint - maps 1:1 to Agent.
 
     Args:
         request: FastAPI request (for trace_id)
         body: Request payload with article, question, and k
-        agent: Injected ProductRecommendationAgent from DI container
+        agent: Injected Agent from DI container
         logger: Injected logger from DI container
 
     Returns:

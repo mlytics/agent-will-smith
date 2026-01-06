@@ -1,5 +1,120 @@
 # Code Guidelines & Review Rules
 
+## Naming Conventions
+
+### File and Class Naming
+**Rule:** Folder names are business-specific. File names and class names are generic. Import paths provide context.
+
+```
+# ✅ CORRECT - Generic names, business context from path
+src/agent/product_recommendation/
+├── agent.py              # class Agent
+├── container.py          # class Container
+└── node/
+    ├── intent_analysis_node.py
+    └── parallel_search_node.py
+
+# Import provides full context
+from src.agent.product_recommendation.agent import Agent
+from src.core.container import Container
+
+# ❌ INCORRECT - Redundant prefixes
+src/agent/product_recommendation/
+├── product_recommendation_agent.py     # class ProductRecommendationAgent
+└── product_recommendation_container.py # class ProductRecommendationContainer
+```
+
+**Why this matters:**
+- **Searchability**: Find by path (`agent/product_recommendation/`) or component type (`agent.py`, `router.py`)
+- **No Redundancy**: Avoid "ProductRecommendationAgent" disease
+- **Scalability**: Easy to add new features without name collisions
+- **Clean Imports**: `from product_recommendation.agent import Agent` is self-documenting
+
+**Naming Rules by Layer:**
+- **Folders**: Business feature slugs (`product_recommendation`, `risk_scoring`, `user_auth`)
+- **Top-level files**: Generic component names (`agent.py`, `router.py`, `container.py`)
+- **Classes**: Generic but role-specific (`Agent`, `Container`, `Router`)
+- **Sub-components**: Can be more specific if needed (`intent_analysis_node.py`)
+
+**When to Be More Specific:**
+
+Sub-components like nodes, tools, or utilities can have descriptive names when:
+- Multiple instances exist in same folder (`intent_analysis_node.py`, `parallel_search_node.py`)
+- Component is not the primary entry point
+- Specificity aids discovery within the module
+
+```python
+# ✅ CORRECT - Specific names for multiple similar components
+src/agent/product_recommendation/node/
+├── intent_analysis_node.py    # class IntentAnalysisNode
+├── parallel_search_node.py    # class ParallelSearchNode
+└── compose_response_node.py   # class ComposeResponseNode
+
+# ✅ CORRECT - Generic names for primary components
+src/agent/product_recommendation/
+├── agent.py        # Main entry point - generic name
+└── container.py    # DI container - generic name
+```
+
+**Handling Import Collisions:**
+
+When importing multiple similar classes, use aliases with the feature prefix:
+
+```python
+# ✅ CORRECT - Clear aliases when needed
+from src.agent.product_recommendation.agent import Agent as ProductAgent
+from src.agent.risk_scoring.agent import Agent as RiskAgent
+from src.core.container import Container as CoreContainer
+
+# ⚠️ AVOID - Only use aliases when there's actual collision
+from src.agent.product_recommendation.agent import Agent as ProductAgent
+# Not needed if you're only importing one Agent in this file
+
+# ❌ INCORRECT - Using aliases everywhere unnecessarily
+from src.agent.product_recommendation.router import router as product_router
+# Just import as 'router' if no collision exists
+```
+
+**Folder Naming Anti-Patterns:**
+
+```
+# ❌ BAD - Technical suffixes instead of business names
+src/agent/
+├── recommendation_agent/      # Remove '_agent' suffix
+├── scoring_service/           # Remove '_service' suffix
+└── user_handler/              # Remove '_handler' suffix
+
+# ✅ GOOD - Pure business domain names
+src/agent/
+├── product_recommendation/    # Business feature
+├── risk_scoring/              # Business feature
+└── user_authentication/       # Business feature
+
+# ❌ BAD - Generic/vague folder names
+src/agent/
+├── core/          # Too generic - core of what?
+├── utils/         # Junk drawer - utils for what?
+└── helpers/       # Meaningless - help with what?
+
+# ✅ GOOD - Specific business domains
+src/agent/
+├── content_moderation/   # Clear business purpose
+├── sentiment_analysis/   # Clear business purpose
+└── fraud_detection/      # Clear business purpose
+
+# ❌ BAD - Abbreviations and acronyms
+src/agent/
+├── prod_rec/      # Unclear abbreviation
+├── usr_mgmt/      # Hard to search
+└── auth_n_z/      # Cryptic
+
+# ✅ GOOD - Full, searchable names
+src/agent/
+├── product_recommendation/
+├── user_management/
+└── authentication/
+```
+
 ## Dependency Injection
 
 ### Singleton Management
@@ -51,11 +166,11 @@ logger: providers.Provider[Logger] = providers.Factory(get_logger)
 ```
 src/app/api/
 ├── system/              # System-level routes (health, metrics)
-│   ├── routes.py
-│   └── dto/schemas.py
+│   ├── router.py        # FastAPI router with endpoints
+│   └── dto/schemas.py   # Request/response models
 └── product_recommendation/  # Feature-specific routes
-    ├── routes.py
-    └── dto/schemas.py
+    ├── router.py        # FastAPI router with endpoints
+    └── dto/schemas.py   # Request/response models
 ```
 
 ## Docker & Deployment

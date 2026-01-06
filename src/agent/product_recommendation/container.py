@@ -6,7 +6,7 @@ Uses dependency_injector for declarative DI following the joke_agent pattern.
 from dependency_injector import containers, providers
 import structlog
 
-from src.core.core_container import CoreContainer
+from src.core.container import Container
 from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
 from src.agent.product_recommendation.infra.llm_client import LLMClient
 from src.agent.product_recommendation.infra.vector_search import VectorSearchClient
@@ -14,7 +14,7 @@ from src.agent.product_recommendation.node.query_builder import QueryBuilder
 from src.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from src.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from src.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
-from src.agent.product_recommendation.product_recommendation_agent import ProductRecommendationAgent
+from src.agent.product_recommendation.agent import Agent
 
 
 class Container(containers.DeclarativeContainer):
@@ -24,10 +24,10 @@ class Container(containers.DeclarativeContainer):
     1. Core (Logger)
     2. Infrastructure (LLMClient, VectorSearchClient)
     3. Nodes (IntentAnalysisNode, ParallelSearchNode, ComposeResponseNode)
-    4. Agent (ProductRecommendationAgent)
+    4. Agent (Agent)
     """
 
-    core = providers.Container(CoreContainer)
+    core = providers.Container(Container)
 
     # Agent Configuration
     agent_config: providers.Provider[ProductRecommendationAgentConfig] = providers.Singleton(
@@ -89,8 +89,8 @@ class Container(containers.DeclarativeContainer):
     )
 
     # Agent layer - Product recommendation agent (Factory for flexibility)
-    agent: providers.Provider[ProductRecommendationAgent] = providers.Factory(
-        ProductRecommendationAgent,
+    agent: providers.Provider[Agent] = providers.Factory(
+        Agent,
         intent_analysis_node=intent_analysis_node,
         parallel_search_node=parallel_search_node,
         compose_response_node=compose_response_node,

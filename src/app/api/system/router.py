@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from dependency_injector.wiring import inject, Provide
 import structlog
 
-from src.core.core_container import CoreContainer
+from src.core.container import Container
 from src.app.api.system.dto.schemas import HealthCheckResponse
 
 router = APIRouter()
@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/health", response_model=HealthCheckResponse, tags=["System"])
 @inject
 async def health_check(
-    fastapi_config=Provide[CoreContainer.fastapi_config],
+    fastapi_config=Provide[Container.fastapi_config],
 ):
     """Health check endpoint.
 
@@ -36,7 +36,7 @@ async def health_check(
 @router.get("/ready", response_model=HealthCheckResponse, tags=["System"])
 @inject
 async def readiness_check(
-    fastapi_config=Provide[CoreContainer.fastapi_config],
+    fastapi_config=Provide[Container.fastapi_config],
 ):
     """Readiness check endpoint.
 

@@ -5,7 +5,7 @@ from src.core.config.mlflow_config import MLFlowConfig
 from src.core.config.fastapi_config import FastAPIConfig
 
 
-class CoreContainer(containers.DeclarativeContainer):
+class Container(containers.DeclarativeContainer):
     """Core infrastructure container providing global configuration."""
 
     databricks_config = providers.Singleton(DatabricksConfig)

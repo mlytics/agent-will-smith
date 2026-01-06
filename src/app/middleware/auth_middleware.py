@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse
 from dependency_injector.wiring import inject, Provide
 from starlette.datastructures import Headers
 
-from src.core.core_container import CoreContainer
+from src.core.container import Container
 
 class AuthMiddleware:
     """Authentication middleware using Dependency Injection (pure ASGI).
@@ -21,7 +21,7 @@ class AuthMiddleware:
         self,
         app,
         excluded_paths: Optional[Iterable[str]] = None,
-        api_key: str = Provide[CoreContainer.fastapi_config.provided.api_key],
+        api_key: str = Provide[Container.fastapi_config.provided.api_key],
     ):
         self.app = app
         self.api_key = api_key

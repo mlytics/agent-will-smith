@@ -14,7 +14,7 @@ from src.agent.product_recommendation.node.parallel_search_node import ParallelS
 from src.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
 
 
-class ProductRecommendationAgent:
+class Agent:
     """Graph-based agent for product recommendation workflow.
 
     Follows the joke_agent pattern:

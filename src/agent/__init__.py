@@ -4,7 +4,7 @@ Exports the main agent class and DI container for use in API routes.
 
 Structure:
 - product_recommendation/: Product recommendation agent module
-  - product_recommendation_agent.py: Main agent class (LangGraph)
+  - agent.py: Main agent class (LangGraph)
   - container.py: DI Container (dependency_injector)
   - core/: ExecutionContext, Logger
   - config/: Agent-specific configuration
@@ -13,7 +13,7 @@ Structure:
   - schemas/: State and DTOs
 """
 
-from src.agent.product_recommendation.product_recommendation_agent import ProductRecommendationAgent
+from src.agent.product_recommendation.agent import Agent
 from src.agent.product_recommendation.container import Container
 
-__all__ = ["ProductRecommendationAgent", "Container"]
+__all__ = ["Agent", "Container"]

@@ -11,7 +11,7 @@ import signal
 import structlog
 import sys
 
-from src.core.core_container import CoreContainer
+from src.core.container import Container
 from src.core.logger import configure_logging
 from src.core.exceptions import (
     AgentException,
@@ -34,12 +34,12 @@ from src.core.exceptions import (
 )
 from src.app.middleware.observability_middleware import ObservabilityMiddleware
 from src.app.middleware.auth_middleware import AuthMiddleware
-from src.app.api.system.routes import router as system_router
-from src.app.api.product_recommendation.routes import router as product_recommendation_router
+from src.app.api.system.router import router as system_router
+from src.app.api.product_recommendation.router import router as product_recommendation_router
 
 
 # Global container instance
-_core_container = CoreContainer()
+_core_container = Container()
 
 
 def setup_signal_handlers(app: FastAPI) -> None:
@@ -103,14 +103,14 @@ def create_app() -> FastAPI:
     _core_container.wire(modules=["src.app.middleware.auth_middleware"])
 
     # Wire system routes (health/ready endpoints)
-    _core_container.wire(modules=["src.app.api.system.routes"])
+    _core_container.wire(modules=["src.app.api.system.router"])
 
     from src.agent.product_recommendation.container import Container
 
     # Instantiate agent container with core dependency
     # Note: We keep this reference alive implicitly as it's wired
     container = Container(core=_core_container)
-    container.wire(modules=["src.app.api.product_recommendation.routes"])
+    container.wire(modules=["src.app.api.product_recommendation.router"])
 
     # 5. FastAPI App
     app = FastAPI(
