@@ -86,6 +86,4 @@ class RecommendProductsResponse(BaseModel):
         ..., description="Status: 'complete' if all verticals succeeded, 'partial' if some failed"
     )
     verticals_searched: list[str] = Field(..., description="List of verticals that were searched")
-    trace_id: str = Field(..., description="Trace ID for request tracking and debugging")
-    processing_time_ms: float = Field(..., description="Processing time in milliseconds")
 

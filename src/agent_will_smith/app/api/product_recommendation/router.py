@@ -4,7 +4,6 @@ Follows guideline: "1 HTTP URL ↔ 1 agent"
 Each endpoint maps to a single agent.
 """
 
-import time
 from fastapi import APIRouter, Depends, Request
 import structlog
 
@@ -70,8 +69,6 @@ async def recommend_products_endpoint(
         customer_uuid=body.customer_uuid,
     )
 
-    start_time = time.time()
-
     # Invoke agent - returns Pydantic AgentOutput
     # Any exceptions will bubble to the global exception handler in main.py
     agent_output = await agent.invoke(
@@ -80,7 +77,6 @@ async def recommend_products_endpoint(
         k=body.k,
         verticals=body.product_types or ["activities", "books", "articles"],
         customer_uuid=body.customer_uuid,
-        trace_id=trace_id,
     )
 
     # Transform grouped results to API response format
@@ -114,15 +110,12 @@ async def recommend_products_endpoint(
             )
         )
 
-    processing_time_ms = (time.time() - start_time) * 1000
-
     logger.info(
         "recommend products success",
         trace_id=trace_id,
         total_products=agent_output.total_products,
         status=agent_output.status,
         verticals_searched=verticals_searched,
-        processing_time_ms=round(processing_time_ms, 2),
     )
 
     return RecommendProductsResponse(
@@ -131,6 +124,4 @@ async def recommend_products_endpoint(
         reasoning=agent_output.intent,
         status=agent_output.status,
         verticals_searched=verticals_searched,
-        trace_id=trace_id,
-        processing_time_ms=round(processing_time_ms, 2),
     )

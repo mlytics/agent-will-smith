@@ -4,7 +4,6 @@ Graph-based agent following the joke_agent pattern.
 """
 
 from typing import Optional
-import uuid
 import structlog
 import mlflow
 from langgraph.graph import StateGraph, START, END
@@ -67,7 +66,6 @@ class Agent:
         k: int,
         verticals: list[str],
         customer_uuid: Optional[str] = None,
-        trace_id: Optional[str] = None,
     ) -> AgentOutput:
         """Run the agent with the given inputs.
 
@@ -77,7 +75,6 @@ class Agent:
             k: Number of products per vertical
             verticals: Which verticals to search
             customer_uuid: Optional customer UUID for filtering
-            trace_id: Optional trace_id (auto-generates if None)
 
         Returns:
             AgentOutput with grouped results
@@ -85,8 +82,6 @@ class Agent:
         Note:
             This method is safe for concurrent API requests.
         """
-        if trace_id is None:
-            trace_id = str(uuid.uuid4())
 
         # Add agent metadata to MLflow trace
         mlflow.update_current_trace(
@@ -110,7 +105,6 @@ class Agent:
             question=question,
             k=k,
             verticals=verticals,
-            trace_id=trace_id,
             customer_uuid=customer_uuid,
         )
 

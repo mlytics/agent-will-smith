@@ -25,7 +25,6 @@ class AgentState(BaseModel):
     question: str = Field(..., min_length=5)
     k: int = Field(..., ge=1, le=10)
     verticals: list[VERTICALS]
-    trace_id: str = Field(..., min_length=1)
     customer_uuid: str | None = None
     
     # Intent Analysis Output (from LLM) - Optional
