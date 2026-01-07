@@ -734,3 +734,179 @@ async def endpoint():
 raise UpstreamError("Search failed")  # No details for debugging
 ```
 
+## Configuration Management
+
+### Core Philosophy
+
+**All configuration MUST follow 12-factor app principles with namespace isolation for multi-agent systems.**
+
+This architecture provides:
+- **Namespace isolation**: Multiple agents can have identical config names without conflicts
+- **Clear ownership**: `CORE_*` vs `AGENT_*` prefixes make ownership obvious
+- **Consistency**: All configs use same patterns across the codebase
+- **12-Factor compliance**: Granular, orthogonal environment variables
+- **Scalability**: Easy to add new agents following established patterns
+
+Benefits:
+- **No Conflicts**: Agent A and Agent B can both have `LLM_ENDPOINT` without collision
+- **Discoverability**: Operators can reason about which config belongs to which component
+- **Environment Parity**: Same config structure across dev/staging/prod
+- **Type Safety**: Pydantic BaseSettings provides validation at startup
+
+### Rule 1: Use env_prefix for All Configs
+
+**Rule:** All Pydantic config classes MUST use `env_prefix` to namespace environment variables.
+
+#### Naming Convention: Three-Tier Namespacing
+
+```
+[SCOPE]_[COMPONENT]_[SETTING]
+
+Where:
+- SCOPE: CORE | AGENT
+- COMPONENT: Feature/service name (uppercase snake_case)
+- SETTING: Specific configuration field
+```
+
+**Core Infrastructure Prefixes:**
+```python
+CORE_DATABRICKS_*    # Databricks workspace & auth
+CORE_MLFLOW_*        # MLFlow tracking & registry
+CORE_FASTAPI_*       # API server settings
+CORE_LOG_*           # Logging configuration
+```
+
+**Agent-Specific Prefixes:**
+```python
+AGENT_<NAME>_*       # Per-agent configuration
+
+Examples:
+AGENT_PRODUCT_RECOMMENDATION_*
+AGENT_CONTENT_MODERATION_*
+AGENT_SENTIMENT_ANALYSIS_*
+```
+
+#### Configuration Class Pattern
+
+```python
+# ✅ CORRECT - Core infrastructure config
+class DatabricksConfig(BaseSettings):
+    """Databricks workspace configuration."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="CORE_DATABRICKS_",     # Required
+        case_sensitive=False,               # Required
+    )
+
+    # Field names WITHOUT prefix (Pydantic strips it automatically)
+    host: str = Field(..., description="Databricks workspace URL")
+    client_id: Optional[str] = Field(None, description="OAuth client ID")
+    client_secret: Optional[str] = Field(None, description="OAuth client secret")
+
+# ✅ CORRECT - Agent-specific config
+class ProductRecommendationAgentConfig(BaseSettings):
+    """Configuration for product recommendation agent."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="AGENT_PRODUCT_RECOMMENDATION_",  # Required
+        case_sensitive=False,                         # Required
+        extra="ignore",                               # Required for agents
+    )
+
+    # LLM Configuration
+    llm_endpoint: str = Field(..., description="Databricks LLM endpoint name")
+    llm_temperature: float = Field(default=1.0, description="LLM temperature", ge=0.0, le=2.0)
+    llm_max_tokens: int = Field(..., description="Max tokens for LLM response")
+
+# ❌ INCORRECT - No env_prefix
+class BadConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # Missing env_prefix - will cause conflicts!
+    )
+
+    llm_endpoint: str  # Collides with other agents
+
+# ❌ INCORRECT - Inconsistent settings
+class InconsistentConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="AGENT_FOO_",
+        # Missing case_sensitive=False - inconsistent with other configs
+    )
+```
+
+### Rule 2: Environment Variable Mapping
+
+**Rule:** Environment variables map to config fields automatically. Field names are WITHOUT the prefix.
+
+```python
+# Config class
+class ProductRecommendationAgentConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="AGENT_PRODUCT_RECOMMENDATION_",
+    )
+
+    llm_endpoint: str      # Field name (no prefix)
+    llm_temperature: float
+
+# .env file
+AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT=databricks-gpt-5-mini
+AGENT_PRODUCT_RECOMMENDATION_LLM_TEMPERATURE=1.0
+
+# ✅ Pydantic automatically strips prefix:
+# llm_endpoint = "databricks-gpt-5-mini"
+# llm_temperature = 1.0
+
+# ❌ INCORRECT - Including prefix in field name
+class BadConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="AGENT_FOO_",
+    )
+
+    agent_foo_llm_endpoint: str  # NO! Field should be just 'llm_endpoint'
+```
+
+
+### Rule 3: Shared vs Agent-Specific Configuration
+
+**Rule:** Infrastructure shared by ALL agents goes in `CORE_*`. Per-agent settings go in `AGENT_<NAME>_*`.
+
+#### Decision Tree
+
+1. **Is it used by multiple agents?** (Databricks auth, MLFlow tracking, API server)
+   → Use **`CORE_*`** prefix
+
+2. **Is it specific to one agent?** (LLM endpoint, vector indices, prompts, agent behavior)
+   → Use **`AGENT_<NAME>_`** prefix
+
+3. **Unsure?** → Default to agent-specific. It's easier to share later than to split.
+
+#### Examples
+
+```bash
+# ✅ CORE - Shared infrastructure
+CORE_DATABRICKS_HOST=https://workspace.databricks.com      # Used by all agents
+CORE_DATABRICKS_CLIENT_ID=client-id                        # Shared auth
+CORE_MLFLOW_TRACKING_URI=databricks                        # Shared tracking
+CORE_FASTAPI_PORT=8000                                     # One API server
+
+# ✅ AGENT-SPECIFIC - Per-agent settings
+AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT=gpt-4           # May differ per agent
+AGENT_PRODUCT_RECOMMENDATION_VECTOR_SEARCH_ENDPOINT=...   # Agent-specific index
+AGENT_PRODUCT_RECOMMENDATION_PROMPT_NAME=...              # Agent-specific prompt
+
+AGENT_CONTENT_MODERATION_LLM_ENDPOINT=claude-3            # Different model
+AGENT_CONTENT_MODERATION_VECTOR_SEARCH_ENDPOINT=...       # Different index
+
+# ❌ INCORRECT - Agent-specific in CORE
+CORE_LLM_ENDPOINT=gpt-4  # NO! Different agents may need different models
+
+# ❌ INCORRECT - Shared in AGENT
+AGENT_PRODUCT_RECOMMENDATION_DATABRICKS_HOST=...  # NO! Should be CORE_DATABRICKS_HOST
+```

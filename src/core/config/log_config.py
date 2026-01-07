@@ -9,22 +9,24 @@ class LogConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="CORE_LOG_",
+        case_sensitive=False,
     )
 
-    log_level: Literal["debug", "info", "warning", "error", "fatal"] = Field(
+    level: Literal["debug", "info", "warning", "error", "fatal"] = Field(
         default="info", description="Logging level"
     )
 
-    log_format: Literal["json", "pretty"] = Field(
+    format: Literal["json", "pretty"] = Field(
         default="json", description="Logging format"
     )
 
     @property
-    def log_level_int(self) -> int:
+    def level_int(self) -> int:
         return {
             "debug": logging.DEBUG,
             "info": logging.INFO,
             "warning": logging.WARNING,
             "error": logging.ERROR,
             "fatal": logging.FATAL,
-        }.get(self.log_level)
+        }.get(self.level)

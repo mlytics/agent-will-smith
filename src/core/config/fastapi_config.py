@@ -8,14 +8,16 @@ class FastAPIConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="CORE_FASTAPI_",
+        case_sensitive=False,
     )
 
     app_name: str = Field(default="agent-will-smith", description="Application name")
-    app_version: str = Field(default="0.1.0", description="Application version")
+    app_version: str = Field(..., description="Application version")
     enable_docs: bool = Field(default=False, description="Enable API documentation")
     port: int = Field(default=8000, description="API port")
     api_key: str = Field(
-        default="dev-api-key-replace-in-production",
+        ...,
         description="Bearer token for API authentication",
     )
 

@@ -13,6 +13,7 @@ class ProductRecommendationAgentConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="AGENT_PRODUCT_RECOMMENDATION_",
         case_sensitive=False,
         extra="ignore",
     )
@@ -27,6 +28,14 @@ class ProductRecommendationAgentConfig(BaseSettings):
     activities_index: str = Field(..., description="Databricks vector search index for activities")
     books_index: str = Field(..., description="Databricks vector search index for books")
     articles_index: str = Field(..., description="Databricks vector search index for articles")
+
+    # Timeout Configuration
+    vector_search_timeout_seconds: float = Field(
+        default=5.0,
+        description="Timeout for vector search operations per vertical (seconds)",
+        ge=0.1,
+        le=60.0
+    )
 
     # Agent Behavior
     max_k_products: int = Field(default=10, description="Maximum number of products to return")

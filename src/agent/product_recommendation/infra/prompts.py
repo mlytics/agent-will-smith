@@ -13,7 +13,7 @@ import mlflow
 import structlog
 from functools import lru_cache
 
-from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
+from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from src.agent.product_recommendation.schemas import PromptContent
 from src.core.exceptions import BadRequestError, UpstreamError, UpstreamTimeoutError
 

@@ -6,7 +6,7 @@ Searches all requested verticals in parallel with timeout handling.
 import asyncio
 import structlog
 
-from src.agent.product_recommendation.constants import VERTICALS
+from src.agent.product_recommendation.schemas.types import VERTICALS
 from src.agent.product_recommendation.schemas import (
     AgentState,
     ParallelSearchOutput,
@@ -14,11 +14,8 @@ from src.agent.product_recommendation.schemas import (
 )
 from src.agent.product_recommendation.node.query_builder import QueryBuilder
 from src.agent.product_recommendation.infra.vector_search import VectorSearchClient
-from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
+from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from src.core.exceptions import UpstreamTimeoutError, UpstreamError
-
-# Timeout per vertical search (5 seconds)
-VECTOR_SEARCH_TIMEOUT_SECONDS = 5.0
 
 
 class ParallelSearchNode:
@@ -151,7 +148,7 @@ class ParallelSearchNode:
         query: str,
         k: int,
         customer_uuid: str | None = None,
-        timeout: float = VECTOR_SEARCH_TIMEOUT_SECONDS,
+        timeout: float | None = None,
     ) -> VerticalSearchResult:
         """Search a single vertical with timeout.
 
@@ -160,11 +157,15 @@ class ParallelSearchNode:
             query: Search query text
             k: Number of results to return
             customer_uuid: Optional customer UUID for filtering
-            timeout: Timeout in seconds (default: 5s)
+            timeout: Timeout in seconds (default: from config)
 
         Returns:
             VerticalSearchResult with products or error
         """
+        # Use config value if timeout not explicitly provided
+        if timeout is None:
+            timeout = self.agent_config.vector_search_timeout_seconds
+
         search_methods = {
             "activities": (self.vector_client.search_activities, self.agent_config.activities_index),
             "books": (self.vector_client.search_books, self.agent_config.books_index),

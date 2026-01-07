@@ -43,7 +43,7 @@ def configure_logging(log_config: LogConfig) -> None:
         structlog.processors.TimeStamper(fmt="iso", utc=True),
     ]
 
-    if log_config.log_format == "pretty":
+    if log_config.format == "pretty":
         # Pretty printing for local development
         processors += [
             structlog.dev.ConsoleRenderer(
@@ -59,7 +59,7 @@ def configure_logging(log_config: LogConfig) -> None:
     # Configure structlog
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(log_config.log_level_int),
+        wrapper_class=structlog.make_filtering_bound_logger(log_config.level_int),
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
@@ -67,7 +67,7 @@ def configure_logging(log_config: LogConfig) -> None:
     # Configure stdlib logging to use structlog
     logging.basicConfig(
         format="%(message)s",
-        level=log_config.log_level_int,
+        level=log_config.level_int,
         stream=sys.stdout,
     )
 
