@@ -4,10 +4,12 @@ Agent-specific settings for LLM, vector search, and agent behavior.
 """
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from src.agent_will_smith.core.config.base_agent_config import BaseAgentConfig
 
 
-class ProductRecommendationAgentConfig(BaseSettings):
+class ProductRecommendationAgentConfig(BaseAgentConfig):
     """Configuration for product recommendation agent."""
 
     model_config = SettingsConfigDict(
@@ -44,16 +46,3 @@ class ProductRecommendationAgentConfig(BaseSettings):
 
     # Prompt Management
     prompt_name: str = Field(..., description="MLflow prompt registry path")
-    prompt_cache_ttl: int = Field(
-        ...,
-        description="MLflow prompt cache TTL in seconds, accept only positive integers",
-        gt=0
-    )
-
-    @field_validator("llm_max_tokens", mode="before")
-    @classmethod
-    def empty_str_to_none(cls, v):
-        """Convert empty string to None for optional int fields."""
-        if v == "" or v is None:
-            return None
-        return v

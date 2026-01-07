@@ -6,6 +6,7 @@ Graph-based agent following the joke_agent pattern.
 from typing import Optional
 import uuid
 import structlog
+import mlflow
 from langgraph.graph import StateGraph, START, END
 
 from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
@@ -13,6 +14,7 @@ from agent_will_smith.agent.product_recommendation.schemas.messages import Agent
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
+from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 
 
 class Agent:
@@ -29,6 +31,7 @@ class Agent:
         intent_analysis_node: IntentAnalysisNode,
         parallel_search_node: ParallelSearchNode,
         compose_response_node: ComposeResponseNode,
+        agent_config: ProductRecommendationAgentConfig,
     ):
         """Initialize agent with injected node instances.
 
@@ -36,8 +39,10 @@ class Agent:
             intent_analysis_node: Node for analyzing user intent
             parallel_search_node: Node for parallel vector search
             compose_response_node: Node for composing final response
+            agent_config: Agent configuration for metadata and tracing
         """
         self.logger = structlog.get_logger(__name__)
+        self.agent_config = agent_config
 
         # Build workflow graph
         workflow = StateGraph(AgentState)
@@ -54,6 +59,7 @@ class Agent:
         self.graph = workflow.compile()
         self.logger.info("product recommendation agent initialized")
 
+    @mlflow.trace(name="product_recommendation_agent")
     async def invoke(
         self,
         article: str,
@@ -81,6 +87,14 @@ class Agent:
         """
         if trace_id is None:
             trace_id = str(uuid.uuid4())
+
+        # Add agent metadata to MLflow trace
+        mlflow.update_current_trace(
+            tags={
+                "agent_name": self.agent_config.agent_name,
+                "agent_version": self.agent_config.agent_version,
+            }
+        )
 
         self.logger.info(
             "execution started",

@@ -824,3 +824,35 @@ CORE_LLM_ENDPOINT=gpt-4  # NO! Different agents may need different models
 # ❌ INCORRECT - Shared in AGENT
 AGENT_PRODUCT_RECOMMENDATION_DATABRICKS_HOST=...  # NO! Should be CORE_DATABRICKS_HOST
 ```
+
+### Rule 4: Agent Configs Must Inherit BaseAgentConfig
+
+**Rule:** All agent-specific config classes MUST inherit from `BaseAgentConfig` instead of `BaseSettings`.
+
+```python
+# ✅ CORRECT - Inherit from BaseAgentConfig
+from src.agent_will_smith.core.config.base_agent_config import BaseAgentConfig
+
+class ProductRecommendationAgentConfig(BaseAgentConfig):
+    """Configuration for product recommendation agent."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AGENT_PRODUCT_RECOMMENDATION_",
+        # ... other settings
+    )
+
+    # Agent-specific fields only
+    llm_endpoint: str
+    prompt_name: str
+
+# ❌ INCORRECT - Direct BaseSettings inheritance
+from pydantic_settings import BaseSettings
+
+class ProductRecommendationAgentConfig(BaseSettings):
+    # Missing: agent_name, agent_version, prompt_cache_ttl
+```
+
+**Why this matters:**
+- **Consistency**: All agents have standard identity fields
+- **Version tracking**: Enforces semver format for agent versions
+- **Prompt caching**: Unified cache configuration across all agents

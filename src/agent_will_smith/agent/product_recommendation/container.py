@@ -92,4 +92,5 @@ class Container(containers.DeclarativeContainer):
         intent_analysis_node=intent_analysis_node,
         parallel_search_node=parallel_search_node,
         compose_response_node=compose_response_node,
+        agent_config=agent_config,
     )
