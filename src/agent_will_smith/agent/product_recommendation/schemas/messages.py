@@ -13,22 +13,6 @@ All schemas use Pydantic for runtime validation and type safety.
 from typing import Literal
 from pydantic import BaseModel, Field
 from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
-class AgentContext(BaseModel):
-    """Custom runtime context for the agent.
-
-    This context is passed to tools via ToolRuntime and provides
-    access to request-scoped information.
-    
-    NOTE: Currently only used by @tool decorated functions.
-    """
-
-    trace_id: str = Field(..., min_length=1, description="Trace ID for request tracking")
-    article: str = Field(..., min_length=10, description="Article text to analyze")
-    question: str = Field(..., min_length=5, description="Question to guide search")
-    max_k: int = Field(..., ge=1, le=100, description="Maximum results to return")
-    product_types: list[VERTICALS] | None = Field(
-        default=None, description="Product types to search"
-    )
 
 
 class ProductResult(BaseModel):
@@ -44,18 +28,6 @@ class ProductResult(BaseModel):
     description: str | None = Field(None, description="Product description")
     relevance_score: float = Field(..., ge=0.0, le=1.0, description="Relevance score from vector search")
     metadata: dict = Field(default_factory=dict, description="Product-specific metadata")
-
-
-class AgentResponse(BaseModel):
-    """Structured response format from the agent.
-
-    This is the final output that gets converted to the API response.
-    Follows guideline: "Prefer typed outputs at every boundary."
-    """
-
-    products: list[ProductResult] = Field(..., description="List of recommended products")
-    reasoning: str = Field(..., min_length=1, description="Agent's reasoning")
-    total_searched: int = Field(..., ge=0, description="Total products searched")
 
 
 # =============================================================================

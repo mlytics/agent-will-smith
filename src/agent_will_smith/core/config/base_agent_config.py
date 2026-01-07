@@ -5,8 +5,8 @@ agent-specific configuration classes. It centralizes common fields like agent
 identity and prompt caching configuration.
 """
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, field_validator
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 from semver import Version
 
 class BaseAgentConfig(BaseSettings):

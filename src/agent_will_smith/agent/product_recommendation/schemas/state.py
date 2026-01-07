@@ -1,13 +1,6 @@
-"""Agent-specific schemas for state management and responses.
+"""LangGraph state schema for product recommendation agent.
 
-Follows guideline: "Make state schema explicit early."
-
-Contains:
-- LangGraph State (TypedDict for workflow state)
-- Node Messages (Pydantic for validation at every boundary)
-- Database DTOs (Pydantic for vector search results)
-
-All schemas use Pydantic for runtime validation and type safety.
+See schemas/messages.py for additional agent schemas.
 """
 
 from typing import Literal
@@ -50,8 +43,3 @@ class AgentState(BaseModel):
     # Final Output (from compose node) - Optional
     grouped_results: dict[str, list[dict]] = Field(default_factory=dict)
     total_products: int = 0
-
-
-# =============================================================================
-# Database DTOs (Pydantic models matching vector index schemas)
-# =============================================================================

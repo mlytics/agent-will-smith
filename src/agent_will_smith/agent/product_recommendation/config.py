@@ -3,7 +3,7 @@
 Agent-specific settings for LLM, vector search, and agent behavior.
 """
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
 from src.agent_will_smith.core.config.base_agent_config import BaseAgentConfig
