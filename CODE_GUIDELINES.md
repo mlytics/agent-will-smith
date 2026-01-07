@@ -856,3 +856,52 @@ class ProductRecommendationAgentConfig(BaseSettings):
 - **Consistency**: All agents have standard identity fields
 - **Version tracking**: Enforces semver format for agent versions
 - **Prompt caching**: Unified cache configuration across all agents
+
+## MLflow Tracing
+
+### Rule 1: All Agents Must Set MLflow Trace Tags
+
+**Rule:** Every agent's `invoke()` method MUST call `mlflow.update_current_trace()` with `agent_name` and `agent_version` tags from `BaseAgentConfig`.
+
+This ensures all MLflow traces are properly tagged for:
+- **Trace identification**: Know which agent generated each trace
+- **Version tracking**: Correlate traces with specific agent versions
+- **Debugging**: Filter traces by agent name and version in MLflow UI
+
+```python
+# ✅ CORRECT - Set MLflow tags in invoke()
+class Agent:
+    def __init__(self, ..., agent_config: ProductRecommendationAgentConfig):
+        self.agent_config = agent_config
+
+    @mlflow.trace(name="product_recommendation_agent")
+    async def invoke(self, ...) -> AgentOutput:
+        # Add agent metadata to MLflow trace
+        mlflow.update_current_trace(
+            tags={
+                "agent_name": self.agent_config.agent_name,
+                "agent_version": self.agent_config.agent_version,
+            }
+        )
+        # ... rest of invoke
+
+# ❌ INCORRECT - No MLflow tags
+class Agent:
+    @mlflow.trace(name="product_recommendation_agent")
+    async def invoke(self, ...) -> AgentOutput:
+        # Missing mlflow.update_current_trace() - cannot identify which agent/version
+        # ... rest of invoke
+```
+
+**Why this matters:**
+- **Observability**: Filter traces by agent name in MLflow UI
+- **Version debugging**: Identify which agent version produced specific behavior
+- **Performance analysis**: Compare performance across agent versions
+- **Production debugging**: Quickly find traces from specific agent deployments
+
+**Required tags:**
+| Tag | Source | Description |
+|-----|--------|-------------|
+| `agent_name` | `agent_config.agent_name` | Agent identifier from BaseAgentConfig |
+| `agent_version` | `agent_config.agent_version` | Semver version from BaseAgentConfig |
+
