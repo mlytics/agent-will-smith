@@ -1,179 +1,173 @@
-"""Vector search client for Databricks Vector Search.
+"""Product vector search repository.
 
-Injectable client class for vector search with dependency injection support.
+Repository for product-specific vector search operations.
+Wraps generic VectorSearchClient and adds product-specific business logic:
+- Column selection per product type
+- Result parsing and transformation
+- ProductResult construction
 """
 
 from typing import Literal
-from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
+
+from src.infra.vector_search_client import VectorSearchClient
+from src.agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
+from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from src.core.exceptions import UpstreamError
 import structlog
 
-from src.agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
-from src.core.exceptions import UpstreamError
 
+class ProductVectorRepository:
+    """Repository for product-specific vector search operations.
 
-class VectorSearchClient:
-    """Client class for vector search with dependency injection support.
+    Wraps generic VectorSearchClient and adds product-specific logic.
+    Contains all product-specific transformations that were previously
+    in the agent's VectorSearchClient.
 
-    This replaces the global singleton pattern with an injectable class.
-    The DI container manages the lifecycle as a singleton.
+    The repository layer is the boundary between:
+    - Generic infrastructure (VectorSearchClient)
+    - Domain/business logic (product types, DTOs, transformations)
     """
 
     def __init__(
         self,
-        workspace_url: str,
-        client_id: str,
-        client_secret: str,
-        endpoint_name: str,
+        vector_client: VectorSearchClient,
+        config: ProductRecommendationAgentConfig,
     ):
-        """Initialize vector search client with configuration.
+        """Initialize with injected dependencies.
 
         Args:
-            workspace_url: Databricks workspace URL
-            client_id: Service principal client ID
-            client_secret: Service principal client secret
-            endpoint_name: Vector search endpoint name
+            vector_client: Generic vector search client
+            config: Agent configuration with index names
         """
-        self.endpoint_name = endpoint_name
+        self.vector_client = vector_client
+        self.config = config
         self.logger = structlog.get_logger(__name__)
-        self._client = DatabricksVectorSearchClient(
-            workspace_url=workspace_url,
-            service_principal_client_id=client_id,
-            service_principal_client_secret=client_secret,
-            disable_notice=True,
-        )
-        self.logger.info("vector_search_client_initialized", endpoint=endpoint_name)
 
     def search_activities(
         self,
         query: str,
-        index_name: str,
         max_results: int,
         customer_uuid: str | None = None,
     ) -> list[ProductResult]:
-        """Search activities index.
+        """Search activities with product-specific logic.
 
         Args:
             query: Search query text
-            index_name: Name of the activities index
+            max_results: Maximum number of results
+            customer_uuid: Optional customer UUID for filtering
+
+        Returns:
+            List of ProductResult objects for activities
+        """
+        return self._search_products(
+            query=query,
+            index_name=self.config.activities_index,
+            product_type="activity",
+            max_results=max_results,
+            customer_uuid=customer_uuid,
+        )
+
+    def search_books(
+        self,
+        query: str,
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Search books with product-specific logic.
+
+        Args:
+            query: Search query text
+            max_results: Maximum number of results
+            customer_uuid: Optional customer UUID for filtering
+
+        Returns:
+            List of ProductResult objects for books
+        """
+        return self._search_products(
+            query=query,
+            index_name=self.config.books_index,
+            product_type="book",
+            max_results=max_results,
+            customer_uuid=customer_uuid,
+        )
+
+    def search_articles(
+        self,
+        query: str,
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Search articles with product-specific logic.
+
+        Args:
+            query: Search query text
+            max_results: Maximum number of results
+            customer_uuid: Optional customer UUID for filtering
+
+        Returns:
+            List of ProductResult objects for articles
+        """
+        return self._search_products(
+            query=query,
+            index_name=self.config.articles_index,
+            product_type="article",
+            max_results=max_results,
+            customer_uuid=customer_uuid,
+        )
+
+    def _search_products(
+        self,
+        query: str,
+        index_name: str,
+        product_type: Literal["activity", "book", "article"],
+        max_results: int,
+        customer_uuid: str | None = None,
+    ) -> list[ProductResult]:
+        """Execute search with product-specific transformation.
+
+        Args:
+            query: Search query text
+            index_name: Name of the vector search index
+            product_type: Type of product being searched
             max_results: Maximum number of results
             customer_uuid: Optional customer UUID for filtering
 
         Returns:
             List of ProductResult objects
         """
-        return self._search_index(query, index_name, max_results, "activity", customer_uuid)
+        # Get product-specific columns
+        columns = self._get_columns_for_product_type(product_type)
 
-    def search_books(
-        self,
-        query: str,
-        index_name: str,
-        max_results: int,
-        customer_uuid: str | None = None,
-    ) -> list[ProductResult]:
-        """Search books index."""
-        return self._search_index(query, index_name, max_results, "book", customer_uuid)
+        # Build filters for multi-tenant isolation
+        filters = {}
+        if customer_uuid:
+            filters["customer_uuid"] = customer_uuid
 
-    def search_articles(
-        self,
-        query: str,
-        index_name: str,
-        max_results: int,
-        customer_uuid: str | None = None,
-    ) -> list[ProductResult]:
-        """Search articles index."""
-        return self._search_index(query, index_name, max_results, "article", customer_uuid)
-
-    def _search_index(
-        self,
-        query_text: str,
-        index_name: str,
-        num_results: int,
-        product_type: Literal["activity", "book", "article"],
-        customer_uuid: str | None = None,
-    ) -> list[ProductResult]:
-        """Execute vector search query against a specific index.
-
-        Args:
-            query_text: Query text to search for
-            index_name: Name of the vector search index
-            num_results: Number of results to return
-            product_type: Type of product being searched
-            customer_uuid: Optional customer UUID for multi-tenant filtering
-
-        Returns:
-            List of ProductResult objects
-        """
-        self.logger.info(
-            "vector_search_starting",
+        # Call generic client
+        raw_results = self.vector_client.similarity_search(
             index_name=index_name,
-            product_type=product_type,
-            query_length=len(query_text),
-            num_results=num_results,
-            customer_uuid=customer_uuid,
+            query_text=query,
+            columns=columns,
+            num_results=max_results,
+            filters=filters or None,
         )
 
-        try:
-            # Get vector search index
-            index = self._client.get_index(endpoint_name=self.endpoint_name, index_name=index_name)
-
-            # Define columns to fetch based on product type
-            columns = self._get_columns_for_product_type(product_type)
-
-            # Build filters for multi-tenant isolation
-            filters = {}
-            if customer_uuid:
-                filters["customer_uuid"] = customer_uuid
-
-            # Execute similarity search
-            if filters:
-                results = index.similarity_search(
-                    query_text=query_text,
-                    columns=columns,
-                    filters=filters,
-                    num_results=num_results,
-                )
-            else:
-                results = index.similarity_search(
-                    query_text=query_text,
-                    columns=columns,
-                    num_results=num_results,
-                )
-
-            # Parse response
-            products = self._parse_results(results, product_type, columns)
-
-            self.logger.info(
-                "vector_search_completed",
-                index_name=index_name,
-                product_type=product_type,
-                results_count=len(products),
-            )
-
-            return products
-
-        except Exception as e:
-            self.logger.error(
-                "vector_search_failed",
-                index_name=index_name,
-                product_type=product_type,
-                error=str(e),
-                exc_info=True,
-            )
-            raise UpstreamError(
-                f"Vector search failed for {product_type}",
-                details={
-                    "provider": "databricks_vector_search",
-                    "operation": "similarity_search",
-                    "index_name": index_name,
-                    "product_type": product_type,
-                    "error": str(e),
-                }
-            ) from e
+        # Parse and transform to ProductResult
+        return self._parse_results(raw_results, product_type, columns)
 
     def _get_columns_for_product_type(
         self, product_type: Literal["activity", "book", "article"]
     ) -> list[str]:
-        """Get columns to fetch based on product type."""
+        """Get columns to fetch based on product type.
+
+        PRODUCT-SPECIFIC LOGIC - stays in repository layer.
+
+        Args:
+            product_type: Type of product
+
+        Returns:
+            List of column names to retrieve
+        """
         if product_type == "activity":
             return [
                 "content_id",
@@ -220,11 +214,22 @@ class VectorSearchClient:
         product_type: Literal["activity", "book", "article"],
         columns: list[str],
     ) -> list[ProductResult]:
-        """Parse vector search results into ProductResult objects."""
+        """Parse raw results into ProductResult objects.
+
+        PRODUCT-SPECIFIC LOGIC - stays in repository layer.
+
+        Args:
+            results: Raw dict from Databricks Vector Search
+            product_type: Type of product
+            columns: List of column names fetched
+
+        Returns:
+            List of ProductResult objects
+        """
         products = []
 
         if not isinstance(results, dict):
-            self.logger.error("unexpected_response_type", response_type=type(results).__name__)
+            self.logger.error("unexpected response type", response_type=type(results).__name__)
             raise UpstreamError(
                 "Unexpected vector search response format",
                 details={
@@ -264,7 +269,7 @@ class VectorSearchClient:
             else:
                 continue
 
-            # Let parsing failures raise immediately
+            # Product-specific parsing
             product = self._parse_result_row(result_dict, product_type)
             products.append(product)
 
@@ -273,7 +278,17 @@ class VectorSearchClient:
     def _parse_result_row(
         self, result_dict: dict, product_type: Literal["activity", "book", "article"]
     ) -> ProductResult:
-        """Parse a single result row into ProductResult."""
+        """Parse a single result row into ProductResult.
+
+        PRODUCT-SPECIFIC LOGIC - stays in repository layer.
+
+        Args:
+            result_dict: Raw result dict
+            product_type: Type of product
+
+        Returns:
+            ProductResult object
+        """
         if product_type == "activity":
             dto = ActivityDTO.model_validate(result_dict)
             return ProductResult(

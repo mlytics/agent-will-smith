@@ -94,20 +94,11 @@ class ParallelSearchOutput(BaseModel):
 
 class ComposeResponseOutput(BaseModel):
     """Output from response composer node.
-    
+
     Validates final grouped results structure.
     """
     grouped_results: dict[str, list[dict]] = Field(..., description="Results grouped by vertical")
     total_products: int = Field(..., ge=0, description="Total products across all verticals")
-
-
-class PromptContent(BaseModel):
-    """Validated prompt content from MLflow.
-    
-    Ensures loaded prompts are non-empty and reasonable.
-    """
-    text: str = Field(..., min_length=50, max_length=10000, description="Prompt text from MLflow registry")
-    source: str = Field(..., description="Prompt source URI (e.g., prompts:/...)")
 
 
 class AgentOutput(BaseModel):

@@ -44,6 +44,11 @@ class ProductRecommendationAgentConfig(BaseSettings):
 
     # Prompt Management
     prompt_name: str = Field(..., description="MLflow prompt registry path")
+    prompt_cache_ttl: int = Field(
+        ...,
+        description="MLflow prompt cache TTL in seconds, accept only positive integers",
+        gt=0
+    )
 
     @field_validator("llm_max_tokens", mode="before")
     @classmethod

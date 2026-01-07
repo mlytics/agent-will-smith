@@ -61,7 +61,7 @@ async def recommend_products_endpoint(
     trace_id = getattr(request.state, "trace_id", "unknown")
 
     logger.info(
-        "recommend_products_request",
+        "recommend products request",
         trace_id=trace_id,
         article_length=len(body.article),
         question_length=len(body.question),
@@ -117,7 +117,7 @@ async def recommend_products_endpoint(
     processing_time_ms = (time.time() - start_time) * 1000
 
     logger.info(
-        "recommend_products_success",
+        "recommend products success",
         trace_id=trace_id,
         total_products=agent_output.total_products,
         status=agent_output.status,

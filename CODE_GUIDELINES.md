@@ -184,21 +184,6 @@ src/app/api/
     └── dto/schemas.py   # Request/response models
 ```
 
-## Docker & Deployment
-
-### Graceful Shutdown
-**Rule:** All applications MUST handle SIGTERM/SIGINT for zero-downtime deployments
-
-```python
-def setup_signal_handlers(app: FastAPI) -> None:
-    def signal_handler(sig, frame):
-        logger.info("shutdown_signal_received", signal=signal.Signals(sig).name)
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-```
-
 ## Exception Handling
 
 ### Core Philosophy
@@ -634,105 +619,6 @@ raise UpstreamError(
 | `UpstreamError` | 502 | External service failed | `provider`, `operation` |
 | `UpstreamTimeoutError` | 504 | External service timeout | `provider`, `operation`, `timeout_seconds` |
 | `UpstreamRateLimitError` | 429 | External service rate limited | `provider`, `retry_after` (optional) |
-
-### Common Patterns
-
-#### Pattern 1: Validation (Raise Directly)
-```python
-# ✅ CORRECT - No try-catch needed
-def validate_input(prompt: str):
-    if len(prompt) > MAX_LENGTH:
-        raise DomainValidationError(
-            "Prompt exceeds maximum length",
-            details={"max": MAX_LENGTH, "actual": len(prompt)}
-        )
-    if not prompt.strip():
-        raise BadRequestError("Prompt cannot be empty")
-```
-
-#### Pattern 2: Infrastructure Boundary with Retry
-```python
-# ✅ CORRECT - Retry at infrastructure layer
-class LLMClient:
-    def invoke(self, messages: list, max_retries: int = 3):
-        for attempt in range(max_retries):
-            try:
-                return self._llm.invoke(messages)
-            except LLMTimeout as e:
-                if attempt == max_retries - 1:
-                    raise UpstreamTimeoutError(
-                        "LLM request timed out after retries",
-                        details={
-                            "provider": "databricks_llm",
-                            "operation": "invoke",
-                            "attempts": max_retries,
-                        }
-                    ) from e
-                time.sleep(2 ** attempt)
-            except LLMError as e:
-                raise UpstreamError(
-                    "LLM service error",
-                    details={"provider": "databricks_llm", "error": str(e)}
-                ) from e
-```
-
-#### Pattern 3: Resource Cleanup
-```python
-# ✅ CORRECT - Finally block with re-raise
-async def process_batch(items: list):
-    connection = await db.connect()
-    try:
-        results = []
-        for item in items:
-            results.append(await connection.process(item))
-        return results
-    finally:
-        await connection.close()  # Always cleanup
-        # Exception propagates automatically
-```
-
-### Common Mistakes to Avoid
-
-❌ **Mistake 1: Misusing Exception Types**
-```python
-# Wrong: User input error as upstream error
-if not query:
-    raise UpstreamError("No query")  # Should be BadRequestError
-
-# Wrong: External failure as client error
-except DatabricksError:
-    raise BadRequestError("Failed")  # Should be UpstreamError
-```
-
-❌ **Mistake 2: Silent Catches**
-```python
-try:
-    send_email(user)
-except:
-    pass  # Email failure hidden from user!
-```
-
-❌ **Mistake 3: Missing Exception Chaining**
-```python
-except ThirdPartyError as e:
-    raise UpstreamError("Failed")  # Missing 'from e' - loses stack trace
-```
-
-❌ **Mistake 4: Retry in Wrong Layer**
-```python
-# Route handler
-async def endpoint():
-    for i in range(3):  # Should be in infrastructure layer
-        try:
-            return await service.call()
-        except:
-            continue
-```
-
-❌ **Mistake 5: No Structured Details**
-```python
-raise UpstreamError("Search failed")  # No details for debugging
-```
 
 ## Configuration Management
 

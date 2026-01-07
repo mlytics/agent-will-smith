@@ -14,7 +14,7 @@ import structlog
 from structlog.contextvars import clear_contextvars, bind_contextvars
 
 
-class ObservabilityMiddleware:
+class ObservabilityMiddleware():
     def __init__(self, app):
         self.app = app
         self.logger = structlog.get_logger(__name__)

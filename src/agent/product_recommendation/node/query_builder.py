@@ -49,7 +49,7 @@ class QueryBuilder:
 
         query = "\n\n".join(query_parts)
 
-        self.logger.debug("query_built",
+        self.logger.debug("query built",
                     query_length=len(query),
                     has_intent=bool(intent),
                     article_length=len(article))

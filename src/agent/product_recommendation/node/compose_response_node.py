@@ -38,7 +38,7 @@ class ComposeResponseNode:
         verticals = state.verticals
         k = state.k
 
-        self.logger.info("composing_response", verticals=verticals, k=k)
+        self.logger.info("composing response", verticals=verticals, k=k)
 
         # Group results by vertical
         grouped_results = {}
@@ -48,7 +48,7 @@ class ComposeResponseNode:
             products = getattr(state, vertical, [])
 
             self.logger.debug(
-                "processing_vertical",
+                "processing vertical",
                 vertical=vertical,
                 products_count=len(products),
             )
@@ -63,7 +63,7 @@ class ComposeResponseNode:
             grouped_results[vertical] = top_k
 
             self.logger.debug(
-                "vertical_processed",
+                "vertical processed",
                 vertical=vertical,
                 total_products=len(products),
                 top_k_selected=len(top_k),
@@ -73,7 +73,7 @@ class ComposeResponseNode:
         total_products = sum(len(products) for products in grouped_results.values())
 
         self.logger.info(
-            "response_composed",
+            "response composed",
             total_products=total_products,
             verticals_with_results=[v for v, p in grouped_results.items() if p],
             status=state.status,

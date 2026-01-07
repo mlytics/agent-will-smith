@@ -13,7 +13,7 @@ from src.agent.product_recommendation.schemas import (
     VerticalSearchResult,
 )
 from src.agent.product_recommendation.node.query_builder import QueryBuilder
-from src.agent.product_recommendation.infra.vector_search import VectorSearchClient
+from src.agent.product_recommendation.repo import ProductVectorRepository
 from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from src.core.exceptions import UpstreamTimeoutError, UpstreamError
 
@@ -26,18 +26,18 @@ class ParallelSearchNode:
 
     def __init__(
         self,
-        vector_client: VectorSearchClient,
+        product_repo: ProductVectorRepository,
         query_builder: QueryBuilder,
         agent_config: ProductRecommendationAgentConfig,
     ):
         """Initialize with injected dependencies.
 
         Args:
-            vector_client: Vector search client for making searches
+            product_repo: Product vector repository for making searches
             query_builder: Query builder for constructing search queries
             agent_config: Agent configuration for index names
         """
-        self.vector_client = vector_client
+        self.product_repo = product_repo
         self.query_builder = query_builder
         self.agent_config = agent_config
         self.logger = structlog.get_logger(__name__)
@@ -55,7 +55,7 @@ class ParallelSearchNode:
         intent = state.intent or ""
 
         self.logger.info(
-            "parallel_search_started",
+            "parallel search started",
             verticals=verticals,
             k=state.k,
             has_intent=bool(intent),
@@ -68,7 +68,7 @@ class ParallelSearchNode:
             intent=intent,
         )
 
-        self.logger.debug("search_query_built", query_length=len(query))
+        self.logger.debug("search query built", query_length=len(query))
 
         # Launch parallel searches for all requested verticals
         tasks = [
@@ -81,7 +81,7 @@ class ParallelSearchNode:
             for v in verticals
         ]
 
-        self.logger.info("launching_parallel_searches", num_verticals=len(tasks))
+        self.logger.info("launching parallel searches", num_verticals=len(tasks))
 
         # Execute all searches in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -99,7 +99,7 @@ class ParallelSearchNode:
 
             if isinstance(result, Exception):
                 self.logger.error(
-                    "vertical_search_failed",
+                    "vertical search failed",
                     vertical=vertical,
                     error=str(result),
                     error_type=type(result).__name__,
@@ -112,7 +112,7 @@ class ParallelSearchNode:
                 if result.error:
                     updates["errors"][vertical] = result.error
                     self.logger.warning(
-                        "vertical_search_had_error",
+                        "vertical search had error",
                         vertical=result.vertical,
                         error=result.error,
                     )
@@ -125,7 +125,7 @@ class ParallelSearchNode:
         total_found = sum(len(updates[v]) for v in verticals)
 
         self.logger.info(
-            "parallel_search_completed",
+            "parallel search completed",
             activities_count=len(updates["activities"]),
             books_count=len(updates["books"]),
             articles_count=len(updates["articles"]),
@@ -167,14 +167,14 @@ class ParallelSearchNode:
             timeout = self.agent_config.vector_search_timeout_seconds
 
         search_methods = {
-            "activities": (self.vector_client.search_activities, self.agent_config.activities_index),
-            "books": (self.vector_client.search_books, self.agent_config.books_index),
-            "articles": (self.vector_client.search_articles, self.agent_config.articles_index),
+            "activities": self.product_repo.search_activities,
+            "books": self.product_repo.search_books,
+            "articles": self.product_repo.search_articles,
         }
 
-        search_method, index_name = search_methods[vertical]
+        search_method = search_methods[vertical]
 
-        self.logger.info("vertical_search_starting", vertical=vertical, timeout=timeout)
+        self.logger.info("vertical search starting", vertical=vertical, timeout=timeout)
 
         try:
             # Run search in thread pool with timeout
@@ -182,7 +182,6 @@ class ParallelSearchNode:
                 asyncio.to_thread(
                     search_method,
                     query=query,
-                    index_name=index_name,
                     max_results=k,
                     customer_uuid=customer_uuid,
                 ),
@@ -193,7 +192,7 @@ class ParallelSearchNode:
             results_dicts = [r.model_dump() for r in product_results]
 
             self.logger.info(
-                "vertical_search_completed",
+                "vertical search completed",
                 vertical=vertical,
                 results_count=len(results_dicts),
             )
@@ -202,7 +201,7 @@ class ParallelSearchNode:
 
         except asyncio.TimeoutError as e:
             self.logger.warning(
-                "vertical_search_timeout",
+                "vertical search timeout",
                 vertical=vertical,
                 timeout=timeout,
                 exc_info=True,
@@ -219,7 +218,7 @@ class ParallelSearchNode:
 
         except Exception as e:
             self.logger.error(
-                "vertical_search_error",
+                "vertical search error",
                 vertical=vertical,
                 error=str(e),
                 error_type=type(e).__name__,

@@ -20,7 +20,6 @@ from src.agent.product_recommendation.schemas.messages import (
     VerticalSearchResult,
     ParallelSearchOutput,
     ComposeResponseOutput,
-    PromptContent,
     AgentOutput,
 )
 
@@ -42,7 +41,6 @@ __all__ = [
     "VerticalSearchResult",
     "ParallelSearchOutput",
     "ComposeResponseOutput",
-    "PromptContent",
     "AgentOutput",
     # Database DTOs
     "ActivityDTO",

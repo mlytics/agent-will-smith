@@ -4,10 +4,12 @@ This node performs the ONLY LLM call in the workflow to analyze user intent.
 """
 
 import structlog
+from langchain.messages import SystemMessage, HumanMessage
 
 from src.agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
-from src.agent.product_recommendation.infra.llm_client import LLMClient
-from src.agent.product_recommendation.infra.prompts import load_prompt_from_registry
+from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from src.infra.llm_client import LLMClient
+from src.infra.prompt_client import PromptClient
 from src.core.exceptions import DomainValidationError, UpstreamError, UpstreamTimeoutError, ToolExecutionError
 
 
@@ -17,13 +19,17 @@ class IntentAnalysisNode:
     Injectable class following the joke_agent pattern.
     """
 
-    def __init__(self, llm_client: LLMClient):
+    def __init__(self, llm_client: LLMClient, prompt_client: PromptClient, config: ProductRecommendationAgentConfig):
         """Initialize with injected dependencies.
 
         Args:
             llm_client: LLM client for making LLM calls
+            prompt_client: Prompt client for loading prompts from MLflow
+            config: Agent configuration
         """
         self.llm_client = llm_client
+        self.prompt_client = prompt_client
+        self.config = config
         self.logger = structlog.get_logger(__name__)
 
     def __call__(self, state: AgentState) -> IntentAnalysisOutput:
@@ -42,16 +48,15 @@ class IntentAnalysisNode:
             ToolExecutionError: If intent analysis fails unexpectedly
         """
 
-        self.logger.info("intent_analysis_started")
+        self.logger.info("intent analysis started")
 
         try:
             # Load system prompt from MLflow
-            prompt_content = load_prompt_from_registry()
-            system_prompt = prompt_content.text
+            system_prompt = self.prompt_client.load_prompt(self.config.prompt_name)
             self.logger.debug(
-                "intent_prompt_loaded",
+                "intent prompt loaded",
                 prompt_length=len(system_prompt),
-                prompt_source=prompt_content.source,
+                prompt_source=self.config.prompt_name,
             )
 
             # Truncate article to avoid token limits (keep first 1000 chars)
@@ -68,20 +73,20 @@ What is the user looking for? What are the main topics?
 Provide a concise intent summary (2-3 sentences max)."""
 
             self.logger.info(
-                "intent_analysis_invoking_llm",
+                "intent analysis invoking llm",
                 article_length=len(article_excerpt),
                 question_length=len(state.question),
             )
 
             # Single LLM call
-            intent = self.llm_client.invoke_with_messages(
+            response = self.llm_client.invoke(
                 [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_message),
                 ]
             )
 
-            if not intent:
+            if not response.content:
                 raise DomainValidationError(
                     "LLM returned empty intent",
                     details={
@@ -90,12 +95,12 @@ Provide a concise intent summary (2-3 sentences max)."""
                     }
                 )
 
-            self.logger.info("intent_analysis_completed", intent_length=len(intent))
+            self.logger.info("intent analysis completed", intent_length=len(response.content))
 
-            return IntentAnalysisOutput(intent=intent)
+            return IntentAnalysisOutput(intent=response.content)
 
         except TimeoutError as e:
-            self.logger.error("intent_analysis_timeout", error=str(e), exc_info=True)
+            self.logger.error("intent analysis timeout", error=str(e), exc_info=True)
             raise UpstreamTimeoutError(
                 "Intent analysis timed out",
                 details={
@@ -111,7 +116,7 @@ Provide a concise intent summary (2-3 sentences max)."""
         except Exception as e:
             # Catch truly unexpected errors
             self.logger.error(
-                "intent_analysis_failed",
+                "intent analysis failed",
                 error=str(e),
                 error_type=type(e).__name__,
                 exc_info=True,

@@ -11,7 +11,8 @@ import signal
 import structlog
 import sys
 
-from src.core.container import Container
+from src.core.container import Container as CoreContainer
+from src.infra.container import Container as InfraContainer
 from src.core.logger import configure_logging
 from src.core.exceptions import (
     AgentException,
@@ -39,7 +40,8 @@ from src.app.api.product_recommendation.router import router as product_recommen
 
 
 # Global container instance
-_core_container = Container()
+_core_container = CoreContainer()
+_infra_container = InfraContainer(core_container=_core_container)
 
 
 def setup_signal_handlers(app: FastAPI) -> None:
@@ -52,16 +54,16 @@ def setup_signal_handlers(app: FastAPI) -> None:
     def signal_handler(sig, frame):
         """Handle shutdown signals gracefully."""
         sig_name = signal.Signals(sig).name
-        logger.info("shutdown_signal_received", signal=sig_name)
+        logger.info("shutdown signal received", signal=sig_name)
 
         # FastAPI/Uvicorn will handle cleanup automatically
         # We just log and exit cleanly
-        logger.info("application_shutdown_complete")
+        logger.info("application shutdown complete")
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    logger.info("signal_handlers_registered", signals=["SIGTERM", "SIGINT"])
+    logger.info("signal handlers registered", signals=["SIGTERM", "SIGINT"])
 
 
 def create_app() -> FastAPI:
@@ -85,7 +87,7 @@ def create_app() -> FastAPI:
     logger = structlog.get_logger(__name__)
 
     logger.info(
-        "application_starting",
+        "application starting",
         fastapi_config=fastapi_config,
         mlflow_config=mlflow_config,
         log_config=log_config,
@@ -107,9 +109,9 @@ def create_app() -> FastAPI:
 
     from src.agent.product_recommendation.container import Container
 
-    # Instantiate agent container with core dependency
+    # Instantiate agent container with core and infra dependencies
     # Note: We keep this reference alive implicitly as it's wired
-    container = Container(core=_core_container)
+    container = Container(core_container=_core_container, infra_container=_infra_container)
     container.wire(modules=["src.app.api.product_recommendation.router"])
 
     # 5. FastAPI App
@@ -135,7 +137,7 @@ def create_app() -> FastAPI:
     # Setup graceful shutdown handlers
     setup_signal_handlers(app)
 
-    logger.info("application_ready")
+    logger.info("application ready")
 
     return app
 
@@ -215,7 +217,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     # Log with full context
     logger.error(
-        "exception_handled",
+        "exception handled",
         trace_id=trace_id,
         status_code=status_code,
         error_type=type(exc).__name__,

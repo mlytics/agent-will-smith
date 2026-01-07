@@ -51,7 +51,7 @@ class Agent:
         workflow.add_edge("compose_response", END)
 
         self.graph = workflow.compile()
-        self.logger.info("product_recommendation_agent_initialized")
+        self.logger.info("product recommendation agent initialized")
 
     async def invoke(
         self,
@@ -82,7 +82,7 @@ class Agent:
             trace_id = str(uuid.uuid4())
 
         self.logger.info(
-            "execution_started",
+            "execution started",
             article_length=len(article),
             question_length=len(question),
             verticals=verticals,
@@ -103,7 +103,7 @@ class Agent:
         final_state = AgentState(**final_state_dict)
 
         self.logger.info(
-            "execution_completed",
+            "execution completed",
             total_products=final_state.total_products,
             status=final_state.status,
         )
