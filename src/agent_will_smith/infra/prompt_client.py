@@ -7,7 +7,7 @@ Generic client that can be used by any agent.
 import mlflow
 import structlog
 
-from src.core.exceptions import UpstreamError, UpstreamTimeoutError
+from agent_will_smith.core.exceptions import UpstreamError, UpstreamTimeoutError
 
 
 class PromptClient:

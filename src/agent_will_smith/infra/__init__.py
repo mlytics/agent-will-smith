@@ -8,10 +8,10 @@ Provides generic, reusable clients that can be used by any agent:
 Product-specific logic lives in agent repository layers.
 """
 
-from src.infra.llm_client import LLMClient
-from src.infra.vector_search_client import VectorSearchClient
-from src.infra.prompt_client import PromptClient
-from src.infra.container import Container as InfraContainer
+from agent_will_smith.infra.llm_client import LLMClient
+from agent_will_smith.infra.vector_search_client import VectorSearchClient
+from agent_will_smith.infra.prompt_client import PromptClient
+from agent_will_smith.infra.container import Container as InfraContainer
 
 __all__ = [
     "LLMClient",

@@ -12,7 +12,7 @@ All schemas use Pydantic for runtime validation and type safety.
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from src.agent.product_recommendation.schemas.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
 class AgentState(BaseModel):
     """LangGraph workflow state with Pydantic validation.
     

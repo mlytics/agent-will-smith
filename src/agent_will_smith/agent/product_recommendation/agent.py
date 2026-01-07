@@ -8,10 +8,10 @@ import uuid
 import structlog
 from langgraph.graph import StateGraph, START, END
 
-from src.agent.product_recommendation.schemas import AgentState, AgentOutput
-from src.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
-from src.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
-from src.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
+from agent_will_smith.agent.product_recommendation.schemas import AgentState, AgentOutput
+from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
+from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
+from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
 
 
 class Agent:

@@ -6,16 +6,16 @@ Searches all requested verticals in parallel with timeout handling.
 import asyncio
 import structlog
 
-from src.agent.product_recommendation.schemas.types import VERTICALS
-from src.agent.product_recommendation.schemas import (
+from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.schemas import (
     AgentState,
     ParallelSearchOutput,
     VerticalSearchResult,
 )
-from src.agent.product_recommendation.node.query_builder import QueryBuilder
-from src.agent.product_recommendation.repo import ProductVectorRepository
-from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
-from src.core.exceptions import UpstreamTimeoutError, UpstreamError
+from agent_will_smith.agent.product_recommendation.node.query_builder import QueryBuilder
+from agent_will_smith.agent.product_recommendation.repo import ProductVectorRepository
+from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.core.exceptions import UpstreamTimeoutError, UpstreamError
 
 
 class ParallelSearchNode:

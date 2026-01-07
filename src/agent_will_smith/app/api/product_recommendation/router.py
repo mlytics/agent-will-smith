@@ -8,15 +8,15 @@ import time
 from fastapi import APIRouter, Depends, Request
 import structlog
 
-from src.app.api.product_recommendation.dto.schemas import (
+from agent_will_smith.app.api.product_recommendation.dto.schemas import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,
     VerticalResults,
 )
 from dependency_injector.wiring import inject, Provide
-from src.agent.product_recommendation.container import Container
-from src.agent.product_recommendation.agent import Agent
+from agent_will_smith.agent.product_recommendation.container import Container
+from agent_will_smith.agent.product_recommendation.agent import Agent
 
 router = APIRouter()
 

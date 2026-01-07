@@ -10,9 +10,9 @@ Agents should import their own config from their respective modules.
 Also provides backward-compatible flat access for existing code.
 """
 
-from src.core.config.databricks_config import DatabricksConfig
-from src.core.config.mlflow_config import MLFlowConfig
-from src.core.config.fastapi_config import FastAPIConfig
+from agent_will_smith.core.config.databricks_config import DatabricksConfig
+from agent_will_smith.core.config.mlflow_config import MLFlowConfig
+from agent_will_smith.core.config.fastapi_config import FastAPIConfig
 
 
 # Export for convenience

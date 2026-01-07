@@ -11,7 +11,7 @@ import logging
 import structlog
 import sys
 
-from src.core.config.log_config import LogConfig
+from agent_will_smith.core.config.log_config import LogConfig
 
 
 def configure_logging(log_config: LogConfig) -> None:

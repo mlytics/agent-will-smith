@@ -11,10 +11,10 @@ import signal
 import structlog
 import sys
 
-from src.core.container import Container as CoreContainer
-from src.infra.container import Container as InfraContainer
-from src.core.logger import configure_logging
-from src.core.exceptions import (
+from agent_will_smith.core.container import Container as CoreContainer
+from agent_will_smith.infra.container import Container as InfraContainer
+from agent_will_smith.core.logger import configure_logging
+from agent_will_smith.core.exceptions import (
     AgentException,
     BadRequestError,
     DomainValidationError,
@@ -33,10 +33,10 @@ from src.core.exceptions import (
     PromptLoadError,
     NoResultsFoundError,
 )
-from src.app.middleware.observability_middleware import ObservabilityMiddleware
-from src.app.middleware.auth_middleware import AuthMiddleware
-from src.app.api.system.router import router as system_router
-from src.app.api.product_recommendation.router import router as product_recommendation_router
+from agent_will_smith.app.middleware.observability_middleware import ObservabilityMiddleware
+from agent_will_smith.app.middleware.auth_middleware import AuthMiddleware
+from agent_will_smith.app.api.system.router import router as system_router
+from agent_will_smith.app.api.product_recommendation.router import router as product_recommendation_router
 
 
 # Global container instance
@@ -102,17 +102,17 @@ def create_app() -> FastAPI:
     logger.info("initializing di container")
 
     # Wire auth middleware
-    _core_container.wire(modules=["src.app.middleware.auth_middleware"])
+    _core_container.wire(modules=["agent_will_smith.app.middleware.auth_middleware"])
 
     # Wire system routes (health/ready endpoints)
-    _core_container.wire(modules=["src.app.api.system.router"])
+    _core_container.wire(modules=["agent_will_smith.app.api.system.router"])
 
-    from src.agent.product_recommendation.container import Container
+    from agent_will_smith.agent.product_recommendation.container import Container
 
     # Instantiate agent container with core and infra dependencies
     # Note: We keep this reference alive implicitly as it's wired
     container = Container(core_container=_core_container, infra_container=_infra_container)
-    container.wire(modules=["src.app.api.product_recommendation.router"])
+    container.wire(modules=["agent_will_smith.app.api.product_recommendation.router"])
 
     # 5. FastAPI App
     app = FastAPI(

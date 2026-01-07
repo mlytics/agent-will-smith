@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse
 from dependency_injector.wiring import inject, Provide
 from starlette.datastructures import Headers
 
-from src.core.container import Container
+from agent_will_smith.core.container import Container
 
 class AuthMiddleware:
     """Authentication middleware using Dependency Injection (pure ASGI).

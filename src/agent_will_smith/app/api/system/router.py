@@ -9,8 +9,8 @@ from fastapi import APIRouter
 from dependency_injector.wiring import inject, Provide
 import structlog
 
-from src.core.container import Container
-from src.app.api.system.dto.schemas import HealthCheckResponse
+from agent_will_smith.core.container import Container
+from agent_will_smith.app.api.system.dto.schemas import HealthCheckResponse
 
 router = APIRouter()
 

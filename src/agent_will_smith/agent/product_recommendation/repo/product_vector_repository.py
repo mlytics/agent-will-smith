@@ -9,10 +9,10 @@ Wraps generic VectorSearchClient and adds product-specific business logic:
 
 from typing import Literal
 
-from src.infra.vector_search_client import VectorSearchClient
-from src.agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
-from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
-from src.core.exceptions import UpstreamError
+from agent_will_smith.infra.vector_search_client import VectorSearchClient
+from agent_will_smith.agent.product_recommendation.schemas import ProductResult, ActivityDTO, BookDTO, ArticleDTO
+from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.core.exceptions import UpstreamError
 import structlog
 
 

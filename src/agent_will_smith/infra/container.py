@@ -6,10 +6,10 @@ Product-specific logic lives in agent repository layers.
 
 from dependency_injector import containers, providers
 
-from src.core.container import Container as CoreContainer
-from src.infra.llm_client import LLMClient
-from src.infra.vector_search_client import VectorSearchClient
-from src.infra.prompt_client import PromptClient
+from agent_will_smith.core.container import Container as CoreContainer
+from agent_will_smith.infra.llm_client import LLMClient
+from agent_will_smith.infra.vector_search_client import VectorSearchClient
+from agent_will_smith.infra.prompt_client import PromptClient
 
 
 class Container(containers.DeclarativeContainer):

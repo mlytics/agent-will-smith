@@ -6,11 +6,11 @@ This node performs the ONLY LLM call in the workflow to analyze user intent.
 import structlog
 from langchain.messages import SystemMessage, HumanMessage
 
-from src.agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
-from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
-from src.infra.llm_client import LLMClient
-from src.infra.prompt_client import PromptClient
-from src.core.exceptions import DomainValidationError, UpstreamError, UpstreamTimeoutError, ToolExecutionError
+from agent_will_smith.agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
+from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.infra.llm_client import LLMClient
+from agent_will_smith.infra.prompt_client import PromptClient
+from agent_will_smith.core.exceptions import DomainValidationError, UpstreamError, UpstreamTimeoutError, ToolExecutionError
 
 
 class IntentAnalysisNode:

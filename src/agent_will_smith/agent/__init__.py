@@ -13,7 +13,7 @@ Structure:
   - schemas/: State and DTOs
 """
 
-from src.agent.product_recommendation.agent import Agent
-from src.agent.product_recommendation.container import Container
+from agent_will_smith.agent.product_recommendation.agent import Agent
+from agent_will_smith.agent.product_recommendation.container import Container
 
 __all__ = ["Agent", "Container"]

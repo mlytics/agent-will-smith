@@ -6,7 +6,7 @@ All API boundaries use Pydantic models for validation and documentation.
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from src.agent.product_recommendation.schemas.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
 
 
 class RecommendProductsRequest(BaseModel):

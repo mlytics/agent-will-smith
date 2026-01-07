@@ -5,15 +5,15 @@ Uses dependency_injector for declarative DI following the joke_agent pattern.
 
 from dependency_injector import containers, providers
 
-from src.core.container import Container as CoreContainer
-from src.infra.container import Container as InfraContainer
-from src.agent.product_recommendation.config import ProductRecommendationAgentConfig
-from src.agent.product_recommendation.repo import ProductVectorRepository
-from src.agent.product_recommendation.node.query_builder import QueryBuilder
-from src.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
-from src.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
-from src.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
-from src.agent.product_recommendation.agent import Agent
+from agent_will_smith.core.container import Container as CoreContainer
+from agent_will_smith.infra.container import Container as InfraContainer
+from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.agent.product_recommendation.repo import ProductVectorRepository
+from agent_will_smith.agent.product_recommendation.node.query_builder import QueryBuilder
+from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
+from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
+from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
+from agent_will_smith.agent.product_recommendation.agent import Agent
 
 
 class Container(containers.DeclarativeContainer):

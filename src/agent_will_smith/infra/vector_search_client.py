@@ -7,7 +7,7 @@ Provides low-level access to Databricks Vector Search without product-specific a
 from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
 import structlog
 
-from src.core.exceptions import UpstreamError
+from agent_will_smith.core.exceptions import UpstreamError
 
 
 class VectorSearchClient:

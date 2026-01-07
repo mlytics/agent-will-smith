@@ -9,10 +9,10 @@ All schemas use Pydantic for runtime validation and type safety.
 """
 
 # State
-from src.agent.product_recommendation.schemas.state import AgentState
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
 
 # Messages (node outputs and agent context)
-from src.agent.product_recommendation.schemas.messages import (
+from agent_will_smith.agent.product_recommendation.schemas.messages import (
     AgentContext,
     ProductResult,
     AgentResponse,
@@ -24,7 +24,7 @@ from src.agent.product_recommendation.schemas.messages import (
 )
 
 # Database DTOs (vector search results)
-from src.agent.product_recommendation.schemas.database import (
+from agent_will_smith.agent.product_recommendation.schemas.database import (
     ActivityDTO,
     BookDTO,
     ArticleDTO,
