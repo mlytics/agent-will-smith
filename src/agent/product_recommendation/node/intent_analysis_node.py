@@ -17,15 +17,14 @@ class IntentAnalysisNode:
     Injectable class following the joke_agent pattern.
     """
 
-    def __init__(self, llm_client: LLMClient, logger: structlog.BoundLogger):
+    def __init__(self, llm_client: LLMClient):
         """Initialize with injected dependencies.
 
         Args:
             llm_client: LLM client for making LLM calls
-            logger: Structlog logger with bound context
         """
         self.llm_client = llm_client
-        self.logger = logger
+        self.logger = structlog.get_logger(__name__)
 
     def __call__(self, state: AgentState) -> IntentAnalysisOutput:
         """Analyze intent - the single LLM call in the workflow.

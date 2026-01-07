@@ -132,19 +132,30 @@ agent_config = AgentConfig()  # FORBIDDEN outside main.py
 ```
 
 ### Logger Injection
-**Rule:** Prefer dependency injection for loggers. Or use structlog.get_logger(__name__) in class. Don't use global logger.
+**Rule:** Use `structlog.get_logger(__name__)` directly in class `__init__`. Don't use dependency injection for loggers. Don't use global module-level loggers.
 
 ```python
-# ✅ CORRECT - DI injection
+# ✅ CORRECT - Direct instantiation in __init__
 class MyClass:
-    def __init__(self, logger: structlog.BoundLogger):
-        self.logger = logger
+    def __init__(self):
+        self.logger = structlog.get_logger(__name__)
+        # rest of init
 
-# ⚠️ ACCEPTABLE - Only in src/main.py
+# ✅ CORRECT - In route handlers
+async def endpoint():
+    logger = structlog.get_logger(__name__)
+    # rest of function
+
+# ⚠️ ACCEPTABLE - Only in src/main.py for one-off functions
 logger = structlog.get_logger(__name__)
 
-# ❌ INCORRECT - In other modules
-logger = structlog.get_logger(__name__)  # Avoid outside main.py
+# ❌ INCORRECT - Global module-level logger
+logger = structlog.get_logger(__name__)  # At module level
+
+# ❌ INCORRECT - DI injection
+class MyClass:
+    def __init__(self, logger: structlog.BoundLogger):  # Don't inject
+        self.logger = logger
 ```
 
 ### Container Provider Patterns
@@ -154,8 +165,8 @@ logger = structlog.get_logger(__name__)  # Avoid outside main.py
 # Singleton - Shared instance (configs, clients)
 config: providers.Provider[Config] = providers.Singleton(Config)
 
-# Factory - New instance each time (loggers, stateful objects)
-logger: providers.Provider[Logger] = providers.Factory(get_logger)
+# Factory - New instance each time (stateful objects)
+service: providers.Provider[Service] = providers.Factory(create_service)
 ```
 
 ## API Route Organization

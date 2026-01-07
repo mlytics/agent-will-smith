@@ -24,7 +24,6 @@ class VectorSearchClient:
         client_id: str,
         client_secret: str,
         endpoint_name: str,
-        logger: structlog.BoundLogger,
     ):
         """Initialize vector search client with configuration.
 
@@ -33,10 +32,9 @@ class VectorSearchClient:
             client_id: Service principal client ID
             client_secret: Service principal client secret
             endpoint_name: Vector search endpoint name
-            logger: Structlog logger with bound context
         """
         self.endpoint_name = endpoint_name
-        self.logger = logger
+        self.logger = structlog.get_logger(__name__)
         self._client = DatabricksVectorSearchClient(
             workspace_url=workspace_url,
             service_principal_client_id=client_id,

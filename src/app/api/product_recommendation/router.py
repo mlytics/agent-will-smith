@@ -43,7 +43,6 @@ async def recommend_products_endpoint(
     request: Request,
     body: RecommendProductsRequest,
     agent: Agent = Depends(Provide[Container.agent]),
-    logger: structlog.BoundLogger = Depends(Provide[Container.logger]),
 ) -> RecommendProductsResponse:
     """Recommend products endpoint - maps 1:1 to Agent.
 
@@ -51,7 +50,6 @@ async def recommend_products_endpoint(
         request: FastAPI request (for trace_id)
         body: Request payload with article, question, and k
         agent: Injected Agent from DI container
-        logger: Injected logger from DI container
 
     Returns:
         List of recommended products with reasoning
@@ -59,6 +57,7 @@ async def recommend_products_endpoint(
     Raises:
         HTTPException: On agent failures or invalid inputs
     """
+    logger = structlog.get_logger(__name__)
     trace_id = getattr(request.state, "trace_id", "unknown")
 
     logger.info(

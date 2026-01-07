@@ -9,13 +9,9 @@ import structlog
 class QueryBuilder:
     """Builds search queries deterministically from inputs."""
 
-    def __init__(self, logger: structlog.BoundLogger):
-        """Initialize with injected logger.
-
-        Args:
-            logger: Injected structlog logger
-        """
-        self.logger = logger
+    def __init__(self):
+        """Initialize query builder."""
+        self.logger = structlog.get_logger(__name__)
 
     def build_search_query(self, article: str, question: str, intent: str | None = None) -> str:
         """Build search query deterministically from inputs.

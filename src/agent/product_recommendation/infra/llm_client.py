@@ -19,7 +19,6 @@ class LLMClient:
         endpoint: str,
         temperature: float,
         max_tokens: int,
-        logger: structlog.BoundLogger,
     ):
         """Initialize LLM client with configuration.
 
@@ -27,10 +26,9 @@ class LLMClient:
             endpoint: The Databricks model endpoint to use
             temperature: Temperature for generation
             max_tokens: Maximum tokens for generation
-            logger: Structlog logger with bound context
         """
         self.endpoint = endpoint
-        self.logger = logger
+        self.logger = structlog.get_logger(__name__)
         self._llm = ChatDatabricks(
             endpoint=endpoint,
             temperature=temperature,

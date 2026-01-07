@@ -28,7 +28,6 @@ class Agent:
         intent_analysis_node: IntentAnalysisNode,
         parallel_search_node: ParallelSearchNode,
         compose_response_node: ComposeResponseNode,
-        logger: structlog.BoundLogger,
     ):
         """Initialize agent with injected node instances.
 
@@ -36,9 +35,8 @@ class Agent:
             intent_analysis_node: Node for analyzing user intent
             parallel_search_node: Node for parallel vector search
             compose_response_node: Node for composing final response
-            logger: Structlog logger with bound context
         """
-        self.logger = logger
+        self.logger = structlog.get_logger(__name__)
 
         # Build workflow graph
         workflow = StateGraph(AgentState)

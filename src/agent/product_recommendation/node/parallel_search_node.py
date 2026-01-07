@@ -32,7 +32,6 @@ class ParallelSearchNode:
         vector_client: VectorSearchClient,
         query_builder: QueryBuilder,
         agent_config: ProductRecommendationAgentConfig,
-        logger: structlog.BoundLogger
     ):
         """Initialize with injected dependencies.
 
@@ -40,12 +39,11 @@ class ParallelSearchNode:
             vector_client: Vector search client for making searches
             query_builder: Query builder for constructing search queries
             agent_config: Agent configuration for index names
-            logger: Structlog logger with bound context
         """
         self.vector_client = vector_client
         self.query_builder = query_builder
         self.agent_config = agent_config
-        self.logger = logger
+        self.logger = structlog.get_logger(__name__)
 
     async def __call__(self, state: AgentState) -> ParallelSearchOutput:
         """Execute parallel vector searches for all requested verticals.

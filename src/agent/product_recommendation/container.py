@@ -4,7 +4,6 @@ Uses dependency_injector for declarative DI following the joke_agent pattern.
 """
 
 from dependency_injector import containers, providers
-import structlog
 
 from src.core.container import Container
 from src.agent.product_recommendation.config.settings import ProductRecommendationAgentConfig
@@ -21,10 +20,9 @@ class Container(containers.DeclarativeContainer):
     """Dependency injection container for product recommendation agent.
 
     Follows the joke_agent pattern with layered dependencies:
-    1. Core (Logger)
-    2. Infrastructure (LLMClient, VectorSearchClient)
-    3. Nodes (IntentAnalysisNode, ParallelSearchNode, ComposeResponseNode)
-    4. Agent (Agent)
+    1. Infrastructure (LLMClient, VectorSearchClient)
+    2. Nodes (IntentAnalysisNode, ParallelSearchNode, ComposeResponseNode)
+    3. Agent (Agent)
     """
 
     core = providers.Container(Container)
@@ -34,17 +32,9 @@ class Container(containers.DeclarativeContainer):
         ProductRecommendationAgentConfig
     )
 
-    # Logger
-    # We use a Factory provider so that each injection gets a bound logger
-    # that respects the current context processing pipeline.
-    logger: providers.Provider[structlog.BoundLogger] = providers.Factory(
-        structlog.get_logger,
-    )
-
     # Query Builder
     query_builder: providers.Provider[QueryBuilder] = providers.Factory(
         QueryBuilder,
-        logger=logger,
     )
 
     # Infrastructure layer - LLM client
@@ -53,7 +43,6 @@ class Container(containers.DeclarativeContainer):
         endpoint=agent_config.provided.llm_endpoint,
         temperature=agent_config.provided.llm_temperature,
         max_tokens=agent_config.provided.llm_max_tokens,
-        logger=logger,
     )
 
     # Infrastructure layer - Vector search client
@@ -63,14 +52,12 @@ class Container(containers.DeclarativeContainer):
         client_id=core.databricks_config.provided.databricks_client_id,
         client_secret=core.databricks_config.provided.databricks_client_secret,
         endpoint_name=agent_config.provided.vector_search_endpoint,
-        logger=logger,
     )
 
     # Node layer - Intent analysis
     intent_analysis_node: providers.Provider[IntentAnalysisNode] = providers.Singleton(
         IntentAnalysisNode,
         llm_client=llm_client,
-        logger=logger,
     )
 
     # Node layer - Parallel search
@@ -79,13 +66,11 @@ class Container(containers.DeclarativeContainer):
         vector_client=vector_client,
         query_builder=query_builder,
         agent_config=agent_config,
-        logger=logger,
     )
 
     # Node layer - Compose response
     compose_response_node: providers.Provider[ComposeResponseNode] = providers.Singleton(
         ComposeResponseNode,
-        logger=logger,
     )
 
     # Agent layer - Product recommendation agent (Factory for flexibility)
@@ -94,5 +79,4 @@ class Container(containers.DeclarativeContainer):
         intent_analysis_node=intent_analysis_node,
         parallel_search_node=parallel_search_node,
         compose_response_node=compose_response_node,
-        logger=logger,
     )

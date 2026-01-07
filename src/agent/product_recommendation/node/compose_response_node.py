@@ -16,13 +16,9 @@ class ComposeResponseNode:
     This is a pure node with no external dependencies.
     """
 
-    def __init__(self, logger: structlog.BoundLogger):
-        """Initialize with injected logger.
-
-        Args:
-            logger: Structlog logger with bound context
-        """
-        self.logger = logger
+    def __init__(self):
+        """Initialize response composer."""
+        self.logger = structlog.get_logger(__name__)
 
     def __call__(self, state: AgentState) -> ComposeResponseOutput:
         """Compose final grouped response from search results.
