@@ -9,26 +9,18 @@ WORKDIR /build
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
+# Copy dependency files and source code
 COPY pyproject.toml uv.lock* README.md ./
+COPY src/ ./src/
 
 # Install dependencies using uv
 # Note: uv.lock is optional - if not present, uv will resolve from pyproject.toml
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-dev
 
 # Stage 2: Runtime
 FROM python:3.14-slim
 
 WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy uv for runtime
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Copy virtual environment from builder
 COPY --from=builder /build/.venv /app/.venv
@@ -44,10 +36,7 @@ USER appuser
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"
-
-# Health check for container orchestration
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+ENV PYTHONPATH=/app/src
 
 # Expose port
 EXPOSE 8000

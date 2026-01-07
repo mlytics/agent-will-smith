@@ -6,7 +6,8 @@ This node performs the ONLY LLM call in the workflow to analyze user intent.
 import structlog
 from langchain.messages import SystemMessage, HumanMessage
 
-from agent_will_smith.agent.product_recommendation.schemas import AgentState, IntentAnalysisOutput
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
+from agent_will_smith.agent.product_recommendation.schemas.messages import IntentAnalysisOutput
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from agent_will_smith.infra.llm_client import LLMClient
 from agent_will_smith.infra.prompt_client import PromptClient

@@ -7,13 +7,13 @@ import asyncio
 import structlog
 
 from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
-from agent_will_smith.agent.product_recommendation.schemas import (
-    AgentState,
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
+from agent_will_smith.agent.product_recommendation.schemas.messages import (
     ParallelSearchOutput,
     VerticalSearchResult,
 )
 from agent_will_smith.agent.product_recommendation.node.query_builder import QueryBuilder
-from agent_will_smith.agent.product_recommendation.repo import ProductVectorRepository
+from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from agent_will_smith.core.exceptions import UpstreamTimeoutError, UpstreamError
 

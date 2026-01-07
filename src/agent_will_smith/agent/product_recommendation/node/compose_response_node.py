@@ -6,7 +6,8 @@ No external calls, deterministic output.
 
 import structlog
 
-from agent_will_smith.agent.product_recommendation.schemas import AgentState, ComposeResponseOutput
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
+from agent_will_smith.agent.product_recommendation.schemas.messages import ComposeResponseOutput
 
 
 class ComposeResponseNode:
