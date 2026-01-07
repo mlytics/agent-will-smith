@@ -115,6 +115,34 @@ src/agent/
 └── authentication/
 ```
 
+### Package Initialization
+
+**Rule:** All `__init__.py` files MUST be empty. Use explicit imports from module files.
+
+```python
+# ✅ CORRECT - Empty __init__.py
+# (file is empty or contains only a newline)
+
+# ✅ CORRECT - Explicit imports
+from agent_will_smith.agent.product_recommendation.agent import Agent
+from agent_will_smith.core.container import Container as CoreContainer
+
+# ❌ INCORRECT - Convenience re-exports in __init__.py
+# In src/agent/__init__.py:
+from agent_will_smith.agent.product_recommendation.agent import Agent
+from agent_will_smith.agent.product_recommendation.container import Container
+__all__ = ["Agent", "Container"]
+
+# ❌ INCORRECT - Using convenience imports
+from agent_will_smith.agent import Agent  # Relies on __init__.py exports
+```
+
+**Why this matters:**
+- **Explicit is better than implicit**: Import paths show exactly where code comes from
+- **No hidden dependencies**: Readers can trace imports directly to source files
+- **Prevents circular imports**: Empty `__init__.py` files eliminate a common source of import cycles
+- **IDE support**: Auto-complete and go-to-definition work better with explicit imports
+
 ## Dependency Injection
 
 ### Singleton Management
