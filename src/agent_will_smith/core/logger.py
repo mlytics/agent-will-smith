@@ -70,20 +70,3 @@ def configure_logging(log_config: LogConfig) -> None:
         level=log_config.level_int,
         stream=sys.stdout,
     )
-
-    # root_logger = structlog.get_logger()
-    # def handle_exception(exc_type, exc_value, exc_traceback):
-    #     """
-    #     Log any uncaught exception instead of letting it be printed by Python
-    #     (but leave KeyboardInterrupt untouched to allow users to Ctrl+C to stop)
-    #     See https://stackoverflow.com/a/16993115/3641865
-    #     """
-    #     if issubclass(exc_type, KeyboardInterrupt):
-    #         sys.__excepthook__(exc_type, exc_value, exc_traceback)
-    #         return
-
-    #     root_logger.error(
-    #         "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
-    #     )
-
-    # sys.excepthook = handle_exception

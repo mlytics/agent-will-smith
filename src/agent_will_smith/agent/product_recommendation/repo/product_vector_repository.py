@@ -9,6 +9,8 @@ Wraps generic VectorSearchClient and adds product-specific business logic:
 
 from typing import Literal
 
+from pydantic import ValidationError
+
 from agent_will_smith.infra.vector_search_client import VectorSearchClient
 from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult
 from agent_will_smith.agent.product_recommendation.schemas.database import ActivityDTO, BookDTO, ArticleDTO
@@ -291,7 +293,18 @@ class ProductVectorRepository:
             ProductResult object
         """
         if product_type == "activity":
-            dto = ActivityDTO.model_validate(result_dict)
+            try:
+                dto = ActivityDTO.model_validate(result_dict)
+            except ValidationError as e:
+                raise UpstreamError(
+                    "Invalid data format from vector search",
+                    details={
+                        "provider": "databricks_vector_search",
+                        "operation": "parse_result",
+                        "product_type": product_type,
+                        "validation_errors": e.errors(),
+                    }
+                ) from e
             return ProductResult(
                 product_id=dto.content_id,
                 product_type="activity",
@@ -310,7 +323,18 @@ class ProductVectorRepository:
                 },
             )
         elif product_type == "book":
-            dto = BookDTO.model_validate(result_dict)
+            try:
+                dto = BookDTO.model_validate(result_dict)
+            except ValidationError as e:
+                raise UpstreamError(
+                    "Invalid data format from vector search",
+                    details={
+                        "provider": "databricks_vector_search",
+                        "operation": "parse_result",
+                        "product_type": product_type,
+                        "validation_errors": e.errors(),
+                    }
+                ) from e
             return ProductResult(
                 product_id=dto.content_id,
                 product_type="book",
@@ -327,7 +351,18 @@ class ProductVectorRepository:
                 },
             )
         else:  # article
-            dto = ArticleDTO.model_validate(result_dict)
+            try:
+                dto = ArticleDTO.model_validate(result_dict)
+            except ValidationError as e:
+                raise UpstreamError(
+                    "Invalid data format from vector search",
+                    details={
+                        "provider": "databricks_vector_search",
+                        "operation": "parse_result",
+                        "product_type": product_type,
+                        "validation_errors": e.errors(),
+                    }
+                ) from e
             return ProductResult(
                 product_id=dto.content_id,
                 product_type="article",

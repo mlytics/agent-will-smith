@@ -9,6 +9,8 @@ from langchain.messages import AIMessage
 from langchain_core.messages.base import BaseMessage
 import structlog
 
+from agent_will_smith.core.exceptions import UpstreamError, UpstreamTimeoutError
+
 
 class LLMClient:
     """Generic client for LLM interactions with dependency injection support.
@@ -48,5 +50,30 @@ class LLMClient:
 
         Returns:
             The generated AIMessage
+
+        Raises:
+            UpstreamTimeoutError: If the LLM request times out
+            UpstreamError: If the LLM service fails
         """
-        return self._llm.invoke(messages)
+        try:
+            return self._llm.invoke(messages)
+        except TimeoutError as e:
+            raise UpstreamTimeoutError(
+                "LLM request timed out",
+                details={
+                    "provider": "databricks_llm",
+                    "operation": "chat_completion",
+                    "endpoint": self.endpoint,
+                }
+            ) from e
+        except Exception as e:
+            raise UpstreamError(
+                "LLM service failed",
+                details={
+                    "provider": "databricks_llm",
+                    "operation": "chat_completion",
+                    "endpoint": self.endpoint,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            ) from e

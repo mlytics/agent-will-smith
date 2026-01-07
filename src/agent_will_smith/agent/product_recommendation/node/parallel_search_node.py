@@ -12,10 +12,8 @@ from agent_will_smith.agent.product_recommendation.schemas.messages import (
     ParallelSearchOutput,
     VerticalSearchResult,
 )
-from agent_will_smith.agent.product_recommendation.node.query_builder import QueryBuilder
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
-from agent_will_smith.core.exceptions import UpstreamTimeoutError, UpstreamError
 
 
 class ParallelSearchNode:
@@ -24,32 +22,141 @@ class ParallelSearchNode:
     Injectable class following the joke_agent pattern.
     """
 
+    # Constants for query building
+    ARTICLE_EXCERPT_LENGTH = 300
+
     def __init__(
         self,
         product_repo: ProductVectorRepository,
-        query_builder: QueryBuilder,
         agent_config: ProductRecommendationAgentConfig,
     ):
         """Initialize with injected dependencies.
 
         Args:
             product_repo: Product vector repository for making searches
-            query_builder: Query builder for constructing search queries
-            agent_config: Agent configuration for index names
+            agent_config: Agent configuration for index names and timeouts
         """
         self.product_repo = product_repo
-        self.query_builder = query_builder
         self.agent_config = agent_config
         self.logger = structlog.get_logger(__name__)
 
+    def _build_search_query(
+        self,
+        article: str,
+        question: str,
+        intent: str | None = None
+    ) -> str:
+        """Build search query deterministically from inputs.
+
+        This method combines article, question, and intent into a search query
+        without calling any LLM. The strategy is simple concatenation with structure.
+
+        Args:
+            article: Original article text
+            question: User's question
+            intent: Optional intent from LLM analysis
+
+        Returns:
+            Constructed search query string
+
+        Note: This is deterministic - same inputs always produce same output.
+        """
+        # Use first N chars of article as context (avoid token limits)
+        article_context = article[:self.ARTICLE_EXCERPT_LENGTH]
+        if len(article) > self.ARTICLE_EXCERPT_LENGTH:
+            article_context += "..."
+
+        # Build query with clear structure
+        query_parts = []
+
+        # Intent comes first (most important for semantic search)
+        if intent:
+            query_parts.append(f"Intent: {intent}")
+
+        # Question (what user is looking for)
+        query_parts.append(f"Question: {question}")
+
+        # Article context (background information)
+        query_parts.append(f"Context: {article_context}")
+
+        query = "\n\n".join(query_parts)
+
+        self.logger.debug(
+            "query built",
+            query_length=len(query),
+            has_intent=bool(intent),
+            article_length=len(article)
+        )
+
+        return query
+
+    def _aggregate_results(
+        self,
+        verticals: VERTICALS,
+        results: list[VerticalSearchResult | Exception]
+    ) -> tuple[dict[VERTICALS, list], dict[VERTICALS, str], str]:
+        """Aggregate parallel search results and errors.
+
+        Args:
+            verticals: List of vertical names that were searched
+            results: Results from asyncio.gather (VerticalSearchResult or Exception)
+
+        Returns:
+            Tuple of (vertical_results, errors, status)
+            - vertical_results: Dict mapping vertical name to list of products
+            - errors: Dict mapping vertical name to error message
+            - status: "complete" or "partial"
+        """
+        vertical_results = {
+            "activities": [],
+            "books": [],
+            "articles": [],
+        }
+        errors: dict[VERTICALS, str] = {}
+
+        for vertical, result in zip(verticals, results):
+            if isinstance(result, Exception):
+                self.logger.error(
+                    "vertical search failed",
+                    vertical=vertical,
+                    error=str(result),
+                    error_type=type(result).__name__,
+                    exc_info=result,
+                )
+                errors[vertical] = f"{type(result).__name__}: {str(result)}"
+                vertical_results[vertical] = []
+            else:
+                vertical_results[vertical] = result.products
+                if result.error:
+                    errors[vertical] = result.error
+                    self.logger.warning(
+                        "vertical search had error",
+                        vertical=result.vertical,
+                        error=result.error,
+                    )
+
+        status = "partial" if errors else "complete"
+
+        return vertical_results, errors, status
+
     async def __call__(self, state: AgentState) -> ParallelSearchOutput:
         """Execute parallel vector searches for all requested verticals.
+
+        PARTIAL FAILURE HANDLING (CODE_GUIDELINES.md Rule 2, Case 2):
+        This method implements explicit partial failure handling. Individual
+        vertical searches may fail (timeout, upstream errors), but failures
+        are caught by asyncio.gather() and returned in the errors dict.
+        Available results are still returned.
+
+        Business Justification: Product recommendations should return available
+        results even if some verticals fail. A book search failure shouldn't
+        block activity or article results.
 
         Args:
             state: Current workflow state (Pydantic model)
 
         Returns:
-            ParallelSearchOutput with results per vertical
+            ParallelSearchOutput with results per vertical and any errors
         """
         verticals = state.verticals
         intent = state.intent or ""
@@ -62,7 +169,7 @@ class ParallelSearchNode:
         )
 
         # Build search query from intent + article + question
-        query = self.query_builder.build_search_query(
+        query = self._build_search_query(
             article=state.article,
             question=state.question,
             intent=intent,
@@ -87,58 +194,26 @@ class ParallelSearchNode:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Aggregate results
-        updates = {
-            "activities": [],
-            "books": [],
-            "articles": [],
-            "errors": {},
-        }
-
-        for i, result in enumerate(results):
-            vertical = verticals[i]
-
-            if isinstance(result, Exception):
-                self.logger.error(
-                    "vertical search failed",
-                    vertical=vertical,
-                    error=str(result),
-                    error_type=type(result).__name__,
-                    exc_info=result,
-                )
-                updates["errors"][vertical] = f"{type(result).__name__}: {str(result)}"
-                updates[vertical] = []
-            else:
-                updates[vertical] = result.products
-                if result.error:
-                    updates["errors"][vertical] = result.error
-                    self.logger.warning(
-                        "vertical search had error",
-                        vertical=result.vertical,
-                        error=result.error,
-                    )
-
-        # Determine overall status
-        has_errors = len(updates["errors"]) > 0
-        status = "partial" if has_errors else "complete"
+        vertical_results, errors, status = self._aggregate_results(verticals, results)
 
         # Count results
-        total_found = sum(len(updates[v]) for v in verticals)
+        total_found = sum(len(vertical_results[v]) for v in verticals)
 
         self.logger.info(
             "parallel search completed",
-            activities_count=len(updates["activities"]),
-            books_count=len(updates["books"]),
-            articles_count=len(updates["articles"]),
+            activities_count=len(vertical_results["activities"]),
+            books_count=len(vertical_results["books"]),
+            articles_count=len(vertical_results["articles"]),
             total_found=total_found,
             status=status,
-            errors_count=len(updates["errors"]),
+            errors_count=len(errors),
         )
 
         return ParallelSearchOutput(
-            activities=updates["activities"],
-            books=updates["books"],
-            articles=updates["articles"],
-            errors=updates["errors"],
+            activities=vertical_results["activities"],
+            books=vertical_results["books"],
+            articles=vertical_results["articles"],
+            errors=errors,
             status=status,
         )
 
@@ -176,60 +251,25 @@ class ParallelSearchNode:
 
         self.logger.info("vertical search starting", vertical=vertical, timeout=timeout)
 
-        try:
-            # Run search in thread pool with timeout
-            product_results = await asyncio.wait_for(
-                asyncio.to_thread(
-                    search_method,
-                    query=query,
-                    max_results=k,
-                    customer_uuid=customer_uuid,
-                ),
-                timeout=timeout,
-            )
+        # Run search in thread pool with timeout
+        # Exceptions from infrastructure (UpstreamError) bubble up naturally
+        product_results = await asyncio.wait_for(
+            asyncio.to_thread(
+                search_method,
+                query=query,
+                max_results=k,
+                customer_uuid=customer_uuid,
+            ),
+            timeout=timeout,
+        )
 
-            # Convert Pydantic models to dicts for state storage
-            results_dicts = [r.model_dump() for r in product_results]
+        # Convert Pydantic models to dicts for state storage
+        results_dicts = [r.model_dump() for r in product_results]
 
-            self.logger.info(
-                "vertical search completed",
-                vertical=vertical,
-                results_count=len(results_dicts),
-            )
+        self.logger.info(
+            "vertical search completed",
+            vertical=vertical,
+            results_count=len(results_dicts),
+        )
 
-            return VerticalSearchResult(vertical=vertical, products=results_dicts, error=None)
-
-        except asyncio.TimeoutError as e:
-            self.logger.warning(
-                "vertical search timeout",
-                vertical=vertical,
-                timeout=timeout,
-                exc_info=True,
-            )
-            raise UpstreamTimeoutError(
-                f"Vector search timeout for {vertical}",
-                details={
-                    "provider": "databricks_vector_search",
-                    "operation": "similarity_search",
-                    "vertical": vertical,
-                    "timeout_seconds": timeout,
-                }
-            ) from e
-
-        except Exception as e:
-            self.logger.error(
-                "vertical search error",
-                vertical=vertical,
-                error=str(e),
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
-            raise UpstreamError(
-                f"Vector search failed for {vertical}",
-                details={
-                    "provider": "databricks_vector_search",
-                    "operation": "similarity_search",
-                    "vertical": vertical,
-                    "error": str(e),
-                }
-            ) from e
+        return VerticalSearchResult(vertical=vertical, products=results_dicts, error=None)

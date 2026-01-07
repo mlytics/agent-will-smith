@@ -9,7 +9,6 @@ from agent_will_smith.core.container import Container as CoreContainer
 from agent_will_smith.infra.container import Container as InfraContainer
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
-from agent_will_smith.agent.product_recommendation.node.query_builder import QueryBuilder
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
@@ -33,11 +32,6 @@ class Container(containers.DeclarativeContainer):
     # Agent Configuration
     agent_config: providers.Provider[ProductRecommendationAgentConfig] = providers.Singleton(
         ProductRecommendationAgentConfig
-    )
-
-    # Query Builder
-    query_builder: providers.Provider[QueryBuilder] = providers.Factory(
-        QueryBuilder,
     )
 
     # Infrastructure layer - instantiate shared clients with agent config
@@ -77,7 +71,6 @@ class Container(containers.DeclarativeContainer):
     parallel_search_node: providers.Provider[ParallelSearchNode] = providers.Singleton(
         ParallelSearchNode,
         product_repo=product_vector_repo,
-        query_builder=query_builder,
         agent_config=agent_config,
     )
 

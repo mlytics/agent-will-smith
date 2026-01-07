@@ -11,7 +11,7 @@ from agent_will_smith.agent.product_recommendation.schemas.messages import Inten
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from agent_will_smith.infra.llm_client import LLMClient
 from agent_will_smith.infra.prompt_client import PromptClient
-from agent_will_smith.core.exceptions import DomainValidationError, UpstreamError, UpstreamTimeoutError, ToolExecutionError
+from agent_will_smith.core.exceptions import DomainValidationError
 
 
 class IntentAnalysisNode:
@@ -44,28 +44,26 @@ class IntentAnalysisNode:
 
         Raises:
             DomainValidationError: If LLM returns empty intent
-            UpstreamError: If LLM service has issues
-            UpstreamTimeoutError: If LLM call times out
-            ToolExecutionError: If intent analysis fails unexpectedly
+            UpstreamError: If LLM or prompt loading fails (bubbled from infra layer)
+            UpstreamTimeoutError: If LLM or prompt loading times out (bubbled from infra layer)
         """
 
         self.logger.info("intent analysis started")
 
-        try:
-            # Load system prompt from MLflow
-            system_prompt = self.prompt_client.load_prompt(self.config.prompt_name)
-            self.logger.debug(
-                "intent prompt loaded",
-                prompt_length=len(system_prompt),
-                prompt_source=self.config.prompt_name,
-            )
+        # Load system prompt from MLflow (may raise UpstreamError/UpstreamTimeoutError)
+        system_prompt = self.prompt_client.load_prompt(self.config.prompt_name)
+        self.logger.debug(
+            "intent prompt loaded",
+            prompt_length=len(system_prompt),
+            prompt_source=self.config.prompt_name,
+        )
 
-            # Truncate article to avoid token limits (keep first 1000 chars)
-            article_excerpt = state.article[:1000]
-            if len(state.article) > 1000:
-                article_excerpt += "..."
+        # Truncate article to avoid token limits (keep first 1000 chars)
+        article_excerpt = state.article[:1000]
+        if len(state.article) > 1000:
+            article_excerpt += "..."
 
-            user_message = f"""Article: {article_excerpt}
+        user_message = f"""Article: {article_excerpt}
 
 Question: {state.question}
 
@@ -73,61 +71,30 @@ Please analyze the intent and key themes of this article and question.
 What is the user looking for? What are the main topics?
 Provide a concise intent summary (2-3 sentences max)."""
 
-            self.logger.info(
-                "intent analysis invoking llm",
-                article_length=len(article_excerpt),
-                question_length=len(state.question),
-            )
+        self.logger.info(
+            "intent analysis invoking llm",
+            article_length=len(article_excerpt),
+            question_length=len(state.question),
+        )
 
-            # Single LLM call
-            response = self.llm_client.invoke(
-                [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_message),
-                ]
-            )
+        # Single LLM call (may raise UpstreamError/UpstreamTimeoutError from llm_client)
+        response = self.llm_client.invoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_message),
+            ]
+        )
 
-            if not response.content:
-                raise DomainValidationError(
-                    "LLM returned empty intent",
-                    details={
-                        "validation": "empty_response",
-                        "expected": "non-empty intent string",
-                    }
-                )
-
-            self.logger.info("intent analysis completed", intent_length=len(response.content))
-
-            return IntentAnalysisOutput(intent=response.content)
-
-        except TimeoutError as e:
-            self.logger.error("intent analysis timeout", error=str(e), exc_info=True)
-            raise UpstreamTimeoutError(
-                "Intent analysis timed out",
+        # Business logic validation - this is domain validation, not infra error
+        if not response.content:
+            raise DomainValidationError(
+                "LLM returned empty intent",
                 details={
-                    "provider": "databricks_llm",
-                    "operation": "chat_completion",
+                    "validation": "empty_response",
+                    "expected": "non-empty intent string",
                 }
-            ) from e
-
-        except (DomainValidationError, UpstreamError, UpstreamTimeoutError):
-            # Let specific exceptions bubble up
-            raise
-
-        except Exception as e:
-            # Catch truly unexpected errors
-            self.logger.error(
-                "intent analysis failed",
-                error=str(e),
-                error_type=type(e).__name__,
-                exc_info=True,
             )
-            raise ToolExecutionError(
-                "Intent analysis failed unexpectedly",
-                details={
-                    "tool_name": "intent_analysis",
-                    "is_external": False,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                }
-            ) from e
+
+        self.logger.info("intent analysis completed", intent_length=len(response.content))
+
+        return IntentAnalysisOutput(intent=response.content)

@@ -44,16 +44,16 @@ class Agent:
         self.agent_config = agent_config
 
         # Build workflow graph
-        workflow = StateGraph(AgentState)
-        workflow.add_node("intent_analysis", intent_analysis_node)
-        workflow.add_node("parallel_search", parallel_search_node)
-        workflow.add_node("compose_response", compose_response_node)
+        workflow = StateGraph[AgentState, None, AgentState, AgentState](AgentState)
+        workflow.add_node("intent_analysis_node", intent_analysis_node)
+        workflow.add_node("parallel_search_node", parallel_search_node)
+        workflow.add_node("compose_response_node", compose_response_node)
 
         # Define flow
-        workflow.add_edge(START, "intent_analysis")
-        workflow.add_edge("intent_analysis", "parallel_search")
-        workflow.add_edge("parallel_search", "compose_response")
-        workflow.add_edge("compose_response", END)
+        workflow.add_edge(START, "intent_analysis_node")
+        workflow.add_edge("intent_analysis_node", "parallel_search_node")
+        workflow.add_edge("parallel_search_node", "compose_response_node")
+        workflow.add_edge("compose_response_node", END)
 
         self.graph = workflow.compile()
         self.logger.info("product recommendation agent initialized")
