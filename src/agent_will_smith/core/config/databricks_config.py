@@ -39,5 +39,5 @@ class DatabricksConfig(BaseSettings):
         if self.client_id and self.client_secret:
             os.environ.setdefault("DATABRICKS_CLIENT_ID", self.client_id)
             os.environ.setdefault("DATABRICKS_CLIENT_SECRET", self.client_secret)
-        if self.config_profile:
+        elif self.config_profile:
             os.environ.setdefault("DATABRICKS_CONFIG_PROFILE", self.config_profile)

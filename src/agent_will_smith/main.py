@@ -4,6 +4,7 @@ Main application setup with middleware, routes, and lifecycle management.
 Follows guideline: "One controller of flow" - FastAPI handles HTTP orchestration.
 """
 
+import os
 from fastapi import FastAPI
 import mlflow
 import signal
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     fastapi_config = _core_container.fastapi_config()
     mlflow_config = _core_container.mlflow_config()
     log_config = _core_container.log_config()
+    databricks_config = _core_container.databricks_config()
 
     # 2. Logging
     configure_logging(log_config)
@@ -72,6 +74,7 @@ def create_app() -> FastAPI:
         fastapi_config=fastapi_config,
         mlflow_config=mlflow_config,
         log_config=log_config,
+        databricks_config=databricks_config,
     )
 
     # 3. MLflow

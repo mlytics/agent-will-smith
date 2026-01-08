@@ -29,9 +29,9 @@ class Container(containers.DeclarativeContainer):
     # Factory for VectorSearchClient - agents provide endpoint_name
     vector_search_client = providers.Factory(
         VectorSearchClient,
-        workspace_url=core_container.databricks_config.provided.databricks_host,
-        client_id=core_container.databricks_config.provided.databricks_client_id,
-        client_secret=core_container.databricks_config.provided.databricks_client_secret,
+        workspace_url=core_container.databricks_config.provided.host,
+        client_id=core_container.databricks_config.provided.client_id,
+        client_secret=core_container.databricks_config.provided.client_secret,
         # endpoint_name provided by agent container
     )
 
