@@ -154,6 +154,22 @@ from agent_will_smith.agent import Agent  # Relies on __init__.py exports
 - **Prevents circular imports**: Empty `__init__.py` files eliminate a common source of import cycles
 - **IDE support**: Auto-complete and go-to-definition work better with explicit imports
 
+### Import Style
+
+**Rule:** Always use absolute imports from package root. Never use relative imports.
+
+```python
+# ✅ CORRECT - Absolute imports
+from agent_will_smith.agent.product_recommendation.state import AgentState
+from agent_will_smith.core.exceptions import UpstreamError
+
+# ❌ INCORRECT - Relative imports
+from .state import AgentState
+from ...core.exceptions import UpstreamError
+```
+
+**Why:** Explicit paths, refactoring-friendly, better IDE support.
+
 ## Dependency Injection
 
 ### Singleton Management
@@ -197,6 +213,28 @@ class MyClass:
         self.logger = logger
 ```
 
+### Logging Context Propagation
+
+**Rule:** Use structlog contextvars for automatic context propagation. Never pass trace_id through parameters.
+
+```python
+# ✅ CORRECT - Bind once in middleware
+class ObservabilityMiddleware:
+    async def __call__(self, scope, receive, send):
+        clear_contextvars()
+        bind_contextvars(trace_id=str(uuid.uuid4()), method=scope.get("method"))
+        await self.app(scope, receive, send)
+
+# Context automatically propagates to all logs
+self.logger.info("processing")  # Includes trace_id automatically
+
+# ❌ INCORRECT - Manual passing
+def process(self, trace_id: str):  # Don't pass trace_id as parameter
+    self.logger.info("processing", trace_id=trace_id)
+```
+
+**Why:** Automatic context flow, cleaner signatures, async-safe.
+
 ### Container Provider Patterns
 **Rule:** Use correct provider types for different use cases
 
@@ -208,6 +246,75 @@ config: providers.Provider[Config] = providers.Singleton(Config)
 service: providers.Provider[Service] = providers.Factory(create_service)
 ```
 
+**Decision Guide:**
+
+| Use Case | Provider Type | Reason |
+|----------|--------------|--------|
+| Configuration objects | `Singleton` | Immutable, expensive to load |
+| Database clients with connection pools | `Singleton` | Expensive to create, thread-safe |
+| Vector search clients | `Singleton` | Maintains connections |
+| LLM clients | `Singleton` | Configuration-based, stateless |
+| Repositories | `Singleton` | Stateless, wraps singleton clients |
+| Nodes | `Singleton` | Stateless, pure functions |
+| Agents | `Factory` | May have request-specific state |
+| Prompt clients with TTL cache | `Factory` | Cache expires per instance |
+
+### Container Architecture
+
+**Rule:** Use three-tier container composition: Core (configs) → Infra (clients) → Agent (logic).
+
+```python
+# Tier 1: Core - Shared configs
+class CoreContainer(containers.DeclarativeContainer):
+    databricks_config = providers.Singleton(DatabricksConfig)
+    mlflow_config = providers.Singleton(MLFlowConfig)
+
+# Tier 2: Infra - Shared clients
+class InfraContainer(containers.DeclarativeContainer):
+    core_container = providers.Container(CoreContainer)
+    vector_search_client = providers.Singleton(VectorSearchClient, ...)
+
+# Tier 3: Agent - Agent-specific wiring
+class ProductRecommendationContainer(containers.DeclarativeContainer):
+    core_container = providers.Container(CoreContainer)
+    infra_container = providers.Container(InfraContainer)
+    
+    agent_config = providers.Singleton(ProductRecommendationConfig)
+    llm_client = providers.Singleton(
+        infra_container.llm_client,
+        endpoint=agent_config.provided.llm_endpoint,
+    )
+    agent = providers.Factory(Agent, ...)
+```
+
+**Why:** Clear boundaries, reusability across agents, testability at each layer.
+
+### Container Wiring
+
+**Rule:** All DI wiring happens in `src/main.py`. Wire order: core → agents.
+
+```python
+# ✅ CORRECT - In src/main.py only
+def create_app() -> FastAPI:
+    core_container = CoreContainer()
+    infra_container = InfraContainer(core_container=core_container)
+    
+    # Wire core
+    core_container.wire(modules=["agent_will_smith.app.middleware.auth_middleware"])
+    
+    # Wire agents
+    agent_container = Container(core_container=core_container, infra_container=infra_container)
+    agent_container.wire(modules=["agent_will_smith.app.api.product_recommendation.router"])
+    
+    return app
+
+# ❌ INCORRECT - Wiring outside main.py
+container = Container()
+container.wire(modules=[...])  # FORBIDDEN!
+```
+
+**Why:** Single initialization point, prevents circular dependencies, clear visibility.
+
 ## API Route Organization
 
 ### Route Structure
@@ -217,11 +324,77 @@ service: providers.Provider[Service] = providers.Factory(create_service)
 src/app/api/
 ├── system/              # System-level routes (health, metrics)
 │   ├── router.py        # FastAPI router with endpoints
-│   └── dto/schemas.py   # Request/response models
+│   └── dto.py           # Request/response models
 └── product_recommendation/  # Feature-specific routes
     ├── router.py        # FastAPI router with endpoints
-    └── dto/schemas.py   # Request/response models
+    └── dto.py           # Request/response models
 ```
+
+### Router Transformation Responsibility
+
+**Rule:** Routers transform between API DTOs and Agent DTOs. Agents never know about API structure.
+
+```python
+# ✅ CORRECT - Router handles transformations
+@router.post("/recommend-products")
+async def recommend_products_endpoint(
+    body: RecommendProductsRequest,  # API DTO
+    agent: Agent = Depends(Provide[Container.agent]),
+) -> RecommendProductsResponse:  # API DTO
+    
+    # Transform: API Request → Agent Input
+    input_dto = AgentInput(
+        article=body.article,
+        verticals=body.product_types or ["activities", "books"],
+    )
+    
+    # Invoke agent
+    agent_output = await agent.invoke(input_dto)
+    
+    # Transform: Agent Output → API Response
+    return RecommendProductsResponse(
+        results=[...],  # Transform agent_output to API format
+        total=agent_output.total_products,
+    )
+
+# ❌ INCORRECT - Agent uses API DTOs
+async def invoke(self, request: RecommendProductsRequest):  # NO!
+```
+
+**Why:** API independence, versioning flexibility, agent reusability.
+
+### Middleware Architecture
+
+**Rule:** Use pure ASGI middleware. Never use Starlette `BaseHTTPMiddleware`.
+
+```python
+# ✅ CORRECT - Pure ASGI
+class ObservabilityMiddleware:
+    def __init__(self, app):
+        self.app = app
+        self.logger = structlog.get_logger(__name__)
+    
+    async def __call__(self, scope, receive, send):
+        clear_contextvars()
+        trace_id = str(uuid.uuid4())
+        
+        # Store in scope for route handlers
+        scope.setdefault("state", {})["trace_id"] = trace_id
+        
+        # Bind for automatic log propagation
+        bind_contextvars(trace_id=trace_id, method=scope.get("method"))
+        
+        await self.app(scope, receive, send)
+
+# ❌ INCORRECT - BaseHTTPMiddleware
+class ObservabilityMiddleware(BaseHTTPMiddleware):  # Slower, streaming issues
+    async def dispatch(self, request, call_next):
+        return await call_next(request)
+```
+
+**Required:** `__init__(self, app)` and `async __call__(self, scope, receive, send)`.
+
+**Why:** Better performance, streaming support, full ASGI control.
 
 ## Exception Handling
 
@@ -990,6 +1163,37 @@ class IntentAnalysisNode:
 - `IntentAnalysisNode` → `intent_node` namespace
 - `ParallelSearchNode` → `search_node` namespace
 
+### Rule 2.5: Node Implementation Contract
+
+**Rule:** All nodes follow this pattern: `__init__` for dependencies, `__call__(state) -> dict` for execution.
+
+```python
+# ✅ CORRECT - Standard node
+class IntentAnalysisNode:
+    def __init__(self, llm_client: LLMClient, config: Config):
+        self.llm_client = llm_client
+        self.config = config
+        self.logger = structlog.get_logger(__name__)  # NOT injected
+    
+    def __call__(self, state: AgentState) -> dict:
+        # Read from any namespace
+        article = state.input.article
+        
+        # Perform work
+        response = self.llm_client.invoke([...])
+        
+        # Return ONLY own namespace
+        return {"intent_node": IntentNodeNamespace(intent=response.content)}
+
+# ❌ INCORRECT patterns
+def __init__(self, logger: structlog.BoundLogger):  # Don't inject logger
+def __call__(self, state: AgentState, config: dict):  # Only state parameter
+state.intent_node = IntentNodeNamespace(...)  # Don't mutate state
+return {"intent_node": ..., "search_node": ...}  # One namespace only
+```
+
+**Required:** Store dependencies in `__init__`, return dict with single namespace key.
+
 ### Rule 3: Pydantic Throughout
 
 **Rule:** Keep Pydantic models throughout the workflow. Only convert to dict at API boundary.
@@ -1361,3 +1565,43 @@ model/
 - Keep `__init__.py` empty
 - Group by domain concept, not technical concern
 - Maintain import hierarchy: `model/` → `state.py` → `nodes`
+
+### Rule 4: Comprehensive Field Documentation
+
+**Rule:** Every Pydantic field MUST include `description`, constraints, and `examples`.
+
+```python
+# ✅ CORRECT - Complete documentation
+class RecommendProductsRequest(BaseModel):
+    article: str = Field(
+        ...,
+        description="Original article text to analyze",
+        min_length=10,
+        max_length=50000,
+        examples=["This article discusses sustainable living..."],
+    )
+    
+    k: int = Field(
+        ...,
+        description="Number of products per vertical (1-10)",
+        ge=1,
+        le=10,
+        examples=[5],
+    )
+    
+    customer_uuid: str = Field(
+        ...,
+        description="Customer UUID for multi-tenant isolation",
+        pattern=r"^[0-9a-f-]{36}$",
+        examples=["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
+    )
+
+# ❌ INCORRECT - Missing documentation
+class BadRequest(BaseModel):
+    article: str  # No description, constraints, examples
+    k: int = 5  # No bounds
+```
+
+**Required:** `description` (always), constraints (`min_length`, `ge`, `le`, `pattern`), `examples` (always).
+
+**Why:** Self-documenting API, input validation, better DX.
