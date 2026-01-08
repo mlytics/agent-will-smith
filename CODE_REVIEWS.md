@@ -1326,3 +1326,38 @@ class IntentAnalysisNode:
 - **Prevents circular imports**: state.py imports namespaces, nodes import state
 - **Better discoverability**: All state schemas in one place
 - **Clear ownership**: Domain layer owns data structures, nodes own behavior
+
+### Rule 3: Scaling model/ Structure
+
+**Rule:** Start simple with flat files. Split into subdirectories only when needed (>5 related models or >200 lines per file).
+
+**Small to Medium (Most Agents):**
+```
+model/
+├── types.py          # Type definitions & constants
+├── product.py        # Domain entities (1-3 entities)
+└── namespaces.py     # All node namespaces (1-5 namespaces)
+```
+
+**Large/Complex (Split by Category):**
+```
+model/
+├── types.py
+├── entities/         # When >3 domain entities
+│   ├── product.py
+│   └── user.py
+└── namespaces/       # When >5 node namespaces
+    ├── input.py      # Group by workflow phase
+    ├── search.py
+    └── output.py
+```
+
+**When to split:**
+- Single file >200 lines → Split into multiple files
+- 5+ related models → Create subdirectory
+- 5+ namespaces → Group by workflow phase in `namespaces/`
+
+**Always:**
+- Keep `__init__.py` empty
+- Group by domain concept, not technical concern
+- Maintain import hierarchy: `model/` → `state.py` → `nodes`
