@@ -1,6 +1,13 @@
 """Product recommendation agent using LangGraph workflow.
 
 Graph-based agent following the joke_agent pattern.
+
+Namespace Architecture:
+- State is organized into namespaces per node
+- Each node writes to its own namespace only
+- Nodes read from any namespace
+- ProductResult objects preserved throughout workflow
+- Only converted to dict at API boundary
 """
 
 from typing import Optional
@@ -8,7 +15,7 @@ import structlog
 import mlflow
 from langgraph.graph import StateGraph, START, END
 
-from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState, InputsNamespace
 from agent_will_smith.agent.product_recommendation.schemas.messages import AgentOutput
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
@@ -100,27 +107,45 @@ class Agent:
             customer_uuid=customer_uuid,
         )
 
+        # Create initial state with only inputs namespace
         initial_state = AgentState(
-            article=article,
-            question=question,
-            k=k,
-            verticals=verticals,
-            customer_uuid=customer_uuid,
+            inputs=InputsNamespace(
+                article=article,
+                question=question,
+                k=k,
+                verticals=verticals,
+                customer_uuid=customer_uuid,
+            )
         )
 
+        # Run graph (nodes will populate other namespaces)
         final_state_dict = await self.graph.ainvoke(initial_state)
         final_state = AgentState(**final_state_dict)
 
+        # Validate that all required namespaces were populated
+        if final_state.compose_node is None:
+            raise ValueError("compose_node did not execute")
+        if final_state.intent_node is None:
+            raise ValueError("intent_node did not execute")
+        if final_state.search_node is None:
+            raise ValueError("search_node did not execute")
+
         self.logger.info(
             "execution completed",
-            total_products=final_state.total_products,
-            status=final_state.status,
+            total_products=final_state.compose_node.total_products,
+            status=final_state.search_node.status,
         )
 
+        # Convert ProductResult → dict for API response (only at boundary!)
+        grouped_dicts = {
+            vertical: [p.model_dump() for p in products]
+            for vertical, products in final_state.compose_node.grouped_results.items()
+        }
+
         return AgentOutput(
-            grouped_results=final_state.grouped_results,
-            total_products=final_state.total_products,
-            status=final_state.status,
-            errors=final_state.errors,
-            intent=final_state.intent or "No intent provided",
+            grouped_results=grouped_dicts,
+            total_products=final_state.compose_node.total_products,
+            status=final_state.search_node.status,
+            errors=final_state.search_node.errors,
+            intent=final_state.intent_node.intent,
         )

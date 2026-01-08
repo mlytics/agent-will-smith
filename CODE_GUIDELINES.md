@@ -905,3 +905,137 @@ class Agent:
 | `agent_name` | `agent_config.agent_name` | Agent identifier from BaseAgentConfig |
 | `agent_version` | `agent_config.agent_version` | Semver version from BaseAgentConfig |
 
+## LangGraph State Schema Conventions
+
+### Core Philosophy
+
+**All LangGraph agents MUST use namespace-based state architecture for clear ownership and type safety.**
+
+This architecture provides:
+- **Clear ownership**: Each node owns its namespace - no accidental mutations
+- **Type safety**: Pydantic objects throughout workflow, dicts only at API boundary
+- **Scalability**: Dynamic keys (dict) for extensible collections
+- **Explicit dependencies**: Fail-fast validation when namespaces are missing
+
+### Rule 1: Node-Based Namespacing
+
+**Rule:** Every node gets its own sub-model namespace in `AgentState`.
+
+```python
+# ✅ CORRECT - Namespaced state structure
+class AgentState(BaseModel):
+    inputs: InputsNamespace                      # API request data
+    intent_node: Optional[IntentNodeNamespace] = None
+    search_node: Optional[SearchNodeNamespace] = None
+    compose_node: Optional[ComposeNodeNamespace] = None
+
+# ❌ INCORRECT - Flat state (unclear ownership)
+class AgentState(BaseModel):
+    article: str
+    question: str
+    intent: str | None = None           # Who writes this?
+    activities: list[dict] = []         # Which node owns this?
+    grouped_results: dict = {}          # When is this set?
+```
+
+**Namespace model structure:**
+```python
+class SearchNodeNamespace(BaseModel):
+    """
+    Namespace: search_node
+    Owner: ParallelSearchNode
+    Lifecycle: Written once by parallel_search_node
+    """
+    results: dict[VERTICALS, list[ProductResult]]
+    status: Literal["complete", "partial"] = "complete"
+    errors: dict[str, str] = Field(default_factory=dict)
+```
+
+### Rule 2: Write Ownership
+
+**Rule:** Nodes can only WRITE to their own namespace. Nodes can READ from any namespace.
+
+```python
+# ✅ CORRECT - Node writes to own namespace
+class IntentAnalysisNode:
+    def __call__(self, state: AgentState) -> dict:
+        # Read from any namespace
+        article = state.inputs.article
+
+        # Write ONLY to own namespace
+        return {
+            "intent_node": IntentNodeNamespace(intent=result)
+        }
+
+# ❌ INCORRECT - Writing to another node's namespace
+class IntentAnalysisNode:
+    def __call__(self, state: AgentState) -> dict:
+        return {
+            "search_node": SearchNodeNamespace(...)  # FORBIDDEN!
+        }
+```
+
+**Convention:** Node name matches namespace name:
+- `IntentAnalysisNode` → `intent_node` namespace
+- `ParallelSearchNode` → `search_node` namespace
+
+### Rule 3: Pydantic Throughout
+
+**Rule:** Keep Pydantic models throughout the workflow. Only convert to dict at API boundary.
+
+```python
+# ✅ CORRECT - Pydantic objects in state
+class SearchNodeNamespace(BaseModel):
+    results: dict[VERTICALS, list[ProductResult]]  # Type-safe!
+
+# Access with type safety
+for product in state.search_node.results["activities"]:
+    score = product.relevance_score  # ✅ IDE autocomplete works
+
+# ❌ INCORRECT - Convert to dict in state
+class SearchNodeNamespace(BaseModel):
+    results: dict[VERTICALS, list[dict]]  # Lost type safety!
+
+# Access with string keys (error-prone)
+score = product["relevance_score"]  # ❌ No autocomplete, typo risk
+```
+
+**API boundary conversion:**
+```python
+# ✅ CORRECT - Convert to dict only at API boundary
+def invoke(...) -> AgentOutput:
+    # State has Pydantic objects
+    final_state = AgentState(**state_dict)
+
+    # Convert to dict for API response
+    grouped_dicts = {
+        vertical: [p.model_dump() for p in products]
+        for vertical, products in final_state.compose_node.grouped_results.items()
+    }
+
+    return AgentOutput(grouped_results=grouped_dicts)
+```
+
+### Rule 4: Namespace Naming Convention
+
+**Rule:** Follow consistent naming patterns for namespaces.
+
+| Namespace | Format | Example | Owner |
+|-----------|--------|---------|-------|
+| Input data | `inputs` | `inputs: InputsNamespace` | Agent (from API) |
+| Node output | `{node_name}_node` | `intent_node: Optional[IntentNodeNamespace]` | Specific node |
+
+```python
+# ✅ CORRECT - Consistent naming
+class AgentState(BaseModel):
+    inputs: InputsNamespace                      # Reserved name
+    intent_node: Optional[IntentNodeNamespace]   # {node_name}_node
+    search_node: Optional[SearchNodeNamespace]
+    compose_node: Optional[ComposeNodeNamespace]
+
+# ❌ INCORRECT - Inconsistent naming
+class AgentState(BaseModel):
+    input_data: InputsNamespace        # Should be 'inputs'
+    intent: IntentNamespace            # Missing '_node' suffix
+    search_results: SearchNamespace    # Should be 'search_node'
+```

@@ -1,17 +1,19 @@
 """Parallel vector search node for LangGraph workflow.
 
 Searches all requested verticals in parallel with timeout handling.
+
+Namespace Architecture:
+- Reads from: state.inputs, state.intent_node
+- Writes to: state.search_node (results, status, errors)
 """
 
 import asyncio
 import structlog
+from typing import Optional, Literal
 
 from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
-from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
-from agent_will_smith.agent.product_recommendation.schemas.messages import (
-    ParallelSearchOutput,
-    VerticalSearchResult,
-)
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState, SearchNodeNamespace
+from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 
@@ -44,7 +46,7 @@ class ParallelSearchNode:
         self,
         article: str,
         question: str,
-        intent: str | None = None
+        intent: Optional[str] = None
     ) -> str:
         """Build search query deterministically from inputs.
 
@@ -92,27 +94,23 @@ class ParallelSearchNode:
 
     def _aggregate_results(
         self,
-        verticals: VERTICALS,
-        results: list[VerticalSearchResult | Exception]
-    ) -> tuple[dict[VERTICALS, list], dict[VERTICALS, str], str]:
+        verticals: list[VERTICALS],
+        results: list[list[ProductResult] | Exception]
+    ) -> tuple[dict[VERTICALS, list[ProductResult]], dict[str, str], Literal["complete", "partial"]]:
         """Aggregate parallel search results and errors.
 
         Args:
             verticals: List of vertical names that were searched
-            results: Results from asyncio.gather (VerticalSearchResult or Exception)
+            results: Results from asyncio.gather (list[ProductResult] or Exception)
 
         Returns:
             Tuple of (vertical_results, errors, status)
-            - vertical_results: Dict mapping vertical name to list of products
+            - vertical_results: Dict mapping vertical name to list of ProductResult
             - errors: Dict mapping vertical name to error message
             - status: "complete" or "partial"
         """
-        vertical_results = {
-            "activities": [],
-            "books": [],
-            "articles": [],
-        }
-        errors: dict[VERTICALS, str] = {}
+        vertical_results: dict[VERTICALS, list[ProductResult]] = {}
+        errors: dict[str, str] = {}
 
         for vertical, result in zip(verticals, results):
             if isinstance(result, Exception):
@@ -126,20 +124,14 @@ class ParallelSearchNode:
                 errors[vertical] = f"{type(result).__name__}: {str(result)}"
                 vertical_results[vertical] = []
             else:
-                vertical_results[vertical] = result.products
-                if result.error:
-                    errors[vertical] = result.error
-                    self.logger.warning(
-                        "vertical search had error",
-                        vertical=result.vertical,
-                        error=result.error,
-                    )
+                # result is list[ProductResult] - keep as Pydantic objects
+                vertical_results[vertical] = result
 
-        status = "partial" if errors else "complete"
+        status: Literal["complete", "partial"] = "partial" if errors else "complete"
 
         return vertical_results, errors, status
 
-    async def __call__(self, state: AgentState) -> ParallelSearchOutput:
+    async def __call__(self, state: AgentState) -> dict:
         """Execute parallel vector searches for all requested verticals.
 
         PARTIAL FAILURE HANDLING (CODE_GUIDELINES.md Rule 2, Case 2):
@@ -153,25 +145,37 @@ class ParallelSearchNode:
         block activity or article results.
 
         Args:
-            state: Current workflow state (Pydantic model)
+            state: Current workflow state (Pydantic model with namespaces)
 
         Returns:
-            ParallelSearchOutput with results per vertical and any errors
+            dict with "search_node" key containing SearchNodeNamespace
+
+        Raises:
+            ValueError: If intent_node is None (dependency validation)
         """
-        verticals = state.verticals
-        intent = state.intent or ""
+        # Validate dependencies
+        if state.intent_node is None:
+            raise ValueError("intent_node must be set before search_node")
+
+        # Read from namespaces
+        verticals = state.inputs.verticals
+        k = state.inputs.k
+        customer_uuid = state.inputs.customer_uuid
+        article = state.inputs.article
+        question = state.inputs.question
+        intent = state.intent_node.intent
 
         self.logger.info(
             "parallel search started",
             verticals=verticals,
-            k=state.k,
+            k=k,
             has_intent=bool(intent),
         )
 
         # Build search query from intent + article + question
         query = self._build_search_query(
-            article=state.article,
-            question=state.question,
+            article=article,
+            question=question,
             intent=intent,
         )
 
@@ -182,8 +186,8 @@ class ParallelSearchNode:
             self._search_vertical(
                 vertical=v,
                 query=query,
-                k=state.k,
-                customer_uuid=state.customer_uuid,
+                k=k,
+                customer_uuid=customer_uuid,
             )
             for v in verticals
         ]
@@ -197,34 +201,33 @@ class ParallelSearchNode:
         vertical_results, errors, status = self._aggregate_results(verticals, results)
 
         # Count results
-        total_found = sum(len(vertical_results[v]) for v in verticals)
+        total_found = sum(len(vertical_results.get(v, [])) for v in verticals)
 
         self.logger.info(
             "parallel search completed",
-            activities_count=len(vertical_results["activities"]),
-            books_count=len(vertical_results["books"]),
-            articles_count=len(vertical_results["articles"]),
+            vertical_results_keys=list(vertical_results.keys()),
             total_found=total_found,
             status=status,
             errors_count=len(errors),
         )
 
-        return ParallelSearchOutput(
-            activities=vertical_results["activities"],
-            books=vertical_results["books"],
-            articles=vertical_results["articles"],
-            errors=errors,
-            status=status,
-        )
+        # Write to own namespace (keep ProductResult objects!)
+        return {
+            "search_node": SearchNodeNamespace(
+                results=vertical_results,
+                status=status,
+                errors=errors,
+            )
+        }
 
     async def _search_vertical(
         self,
         vertical: VERTICALS,
         query: str,
         k: int,
-        customer_uuid: str | None = None,
-        timeout: float | None = None,
-    ) -> VerticalSearchResult:
+        customer_uuid: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> list[ProductResult]:
         """Search a single vertical with timeout.
 
         Args:
@@ -235,7 +238,7 @@ class ParallelSearchNode:
             timeout: Timeout in seconds (default: from config)
 
         Returns:
-            VerticalSearchResult with products or error
+            list[ProductResult] (Pydantic objects, not dicts)
         """
         # Use config value if timeout not explicitly provided
         if timeout is None:
@@ -263,13 +266,11 @@ class ParallelSearchNode:
             timeout=timeout,
         )
 
-        # Convert Pydantic models to dicts for state storage
-        results_dicts = [r.model_dump() for r in product_results]
-
+        # Keep as Pydantic objects (no dict conversion!)
         self.logger.info(
             "vertical search completed",
             vertical=vertical,
-            results_count=len(results_dicts),
+            results_count=len(product_results),
         )
 
-        return VerticalSearchResult(vertical=vertical, products=results_dicts, error=None)
+        return product_results

@@ -2,12 +2,17 @@
 
 Pure function that reads state and formats grouped results.
 No external calls, deterministic output.
+
+Namespace Architecture:
+- Reads from: state.inputs, state.search_node
+- Writes to: state.compose_node (grouped_results, total_products)
 """
 
 import structlog
 
-from agent_will_smith.agent.product_recommendation.schemas.state import AgentState
-from agent_will_smith.agent.product_recommendation.schemas.messages import ComposeResponseOutput
+from agent_will_smith.agent.product_recommendation.schemas.state import AgentState, ComposeNodeNamespace
+from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult
 
 
 class ComposeResponseNode:
@@ -21,7 +26,7 @@ class ComposeResponseNode:
         """Initialize response composer."""
         self.logger = structlog.get_logger(__name__)
 
-    def __call__(self, state: AgentState) -> ComposeResponseOutput:
+    def __call__(self, state: AgentState) -> dict:
         """Compose final grouped response from search results.
 
         This node:
@@ -31,22 +36,31 @@ class ComposeResponseNode:
         4. Counts totals
 
         Args:
-            state: Current workflow state (Pydantic model)
+            state: Current workflow state (Pydantic model with namespaces)
 
         Returns:
-            ComposeResponseOutput with grouped results and totals
+            dict with "compose_node" key containing ComposeNodeNamespace
+
+        Raises:
+            ValueError: If search_node is None (dependency validation)
         """
-        verticals = state.verticals
-        k = state.k
+        # Validate dependencies
+        if state.search_node is None:
+            raise ValueError("search_node must be set before compose_node")
+
+        # Read from namespaces
+        verticals = state.inputs.verticals
+        k = state.inputs.k
+        search_results = state.search_node.results
 
         self.logger.info("composing response", verticals=verticals, k=k)
 
-        # Group results by vertical
-        grouped_results = {}
+        # Group results by vertical and take top K
+        grouped_results: dict[VERTICALS, list[ProductResult]] = {}
 
         for vertical in verticals:
             # Get products for this vertical (may be empty)
-            products = getattr(state, vertical, [])
+            products = search_results.get(vertical, [])
 
             self.logger.debug(
                 "processing vertical",
@@ -54,9 +68,11 @@ class ComposeResponseNode:
                 products_count=len(products),
             )
 
-            # Sort by relevance score (descending)
+            # Sort by relevance score (type-safe Pydantic field access!)
             sorted_products = sorted(
-                products, key=lambda x: x.get("relevance_score", 0.0), reverse=True
+                products,
+                key=lambda p: p.relevance_score,  # ✅ No string keys needed
+                reverse=True
             )
 
             # Take top K
@@ -77,10 +93,12 @@ class ComposeResponseNode:
             "response composed",
             total_products=total_products,
             verticals_with_results=[v for v, p in grouped_results.items() if p],
-            status=state.status,
         )
 
-        return ComposeResponseOutput(
-            grouped_results=grouped_results,
-            total_products=total_products,
-        )
+        # Write to own namespace
+        return {
+            "compose_node": ComposeNodeNamespace(
+                grouped_results=grouped_results,
+                total_products=total_products,
+            )
+        }
