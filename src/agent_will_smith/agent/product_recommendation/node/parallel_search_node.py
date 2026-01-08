@@ -9,7 +9,7 @@ from agent_will_smith.agent.product_recommendation.model.product import ProductR
 from agent_will_smith.agent.product_recommendation.model.namespaces import SearchNodeNamespace
 from agent_will_smith.agent.product_recommendation.state import AgentState
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
-from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.agent.product_recommendation.config import Config
 
 
 class ParallelSearchNode:
@@ -20,7 +20,7 @@ class ParallelSearchNode:
     def __init__(
         self,
         product_repo: ProductVectorRepository,
-        agent_config: ProductRecommendationAgentConfig,
+        agent_config: Config,
     ):
         self.product_repo = product_repo
         self.agent_config = agent_config

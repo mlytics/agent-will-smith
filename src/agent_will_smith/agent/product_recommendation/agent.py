@@ -25,7 +25,7 @@ from agent_will_smith.agent.product_recommendation.state import (
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from agent_will_smith.agent.product_recommendation.node.output_node import OutputNode
-from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.agent.product_recommendation.config import Config
 
 
 class Agent:
@@ -42,7 +42,7 @@ class Agent:
         intent_analysis_node: IntentAnalysisNode,
         parallel_search_node: ParallelSearchNode,
         output_node: OutputNode,  # RENAMED from compose_response_node
-        agent_config: ProductRecommendationAgentConfig,
+        agent_config: Config,
     ):
         """Initialize agent with injected node instances.
 

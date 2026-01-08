@@ -18,7 +18,7 @@ from agent_will_smith.agent.product_recommendation.repo.dto import (
     BookDTO,
     ArticleDTO,
 )
-from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.agent.product_recommendation.config import Config
 from agent_will_smith.core.exceptions import UpstreamError
 import structlog
 
@@ -38,7 +38,7 @@ class ProductVectorRepository:
     def __init__(
         self,
         vector_client: VectorSearchClient,
-        config: ProductRecommendationAgentConfig,
+        config: Config,
     ):
         """Initialize with injected dependencies.
 

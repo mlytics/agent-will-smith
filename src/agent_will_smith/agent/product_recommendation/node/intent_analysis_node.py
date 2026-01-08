@@ -5,7 +5,7 @@ from langchain.messages import SystemMessage, HumanMessage
 
 from agent_will_smith.agent.product_recommendation.state import AgentState
 from agent_will_smith.agent.product_recommendation.model.namespaces import IntentNodeNamespace
-from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
+from agent_will_smith.agent.product_recommendation.config import Config
 from agent_will_smith.infra.llm_client import LLMClient
 from agent_will_smith.infra.prompt_client import PromptClient
 from agent_will_smith.core.exceptions import DomainValidationError
@@ -14,7 +14,7 @@ from agent_will_smith.core.exceptions import DomainValidationError
 class IntentAnalysisNode:
     """Analyzes user intent using LLM."""
 
-    def __init__(self, llm_client: LLMClient, prompt_client: PromptClient, config: ProductRecommendationAgentConfig):
+    def __init__(self, llm_client: LLMClient, prompt_client: PromptClient, config: Config):
         self.llm_client = llm_client
         self.prompt_client = prompt_client
         self.config = config

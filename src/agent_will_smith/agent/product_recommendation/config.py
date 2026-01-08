@@ -9,7 +9,7 @@ from pydantic_settings import SettingsConfigDict
 from src.agent_will_smith.core.config.base_agent_config import BaseAgentConfig
 
 
-class ProductRecommendationAgentConfig(BaseAgentConfig):
+class Config(BaseAgentConfig):
     """Configuration for product recommendation agent."""
 
     model_config = SettingsConfigDict(
