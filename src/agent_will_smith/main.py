@@ -4,8 +4,7 @@ Main application setup with middleware, routes, and lifecycle management.
 Follows guideline: "One controller of flow" - FastAPI handles HTTP orchestration.
 """
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 import mlflow
 import signal
 import structlog
@@ -14,25 +13,7 @@ import sys
 from agent_will_smith.core.container import Container as CoreContainer
 from agent_will_smith.infra.container import Container as InfraContainer
 from agent_will_smith.core.logger import configure_logging
-from agent_will_smith.core.exceptions import (
-    AgentException,
-    BadRequestError,
-    DomainValidationError,
-    UnauthorizedError,
-    ForbiddenError,
-    NotFoundError,
-    ConflictError,
-    RateLimitedError,
-    AgentStateError,
-    ToolExecutionError,
-    AgentTimeoutError,
-    AgentCancelledError,
-    UpstreamError,
-    UpstreamTimeoutError,
-    UpstreamRateLimitError,
-    PromptLoadError,
-    NoResultsFoundError,
-)
+from agent_will_smith.app.exception_handlers import register_exception_handlers
 from agent_will_smith.app.middleware.observability_middleware import ObservabilityMiddleware
 from agent_will_smith.app.middleware.auth_middleware import AuthMiddleware
 from agent_will_smith.app.api.system.router import router as system_router
@@ -127,6 +108,9 @@ def create_app() -> FastAPI:
     app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(AuthMiddleware, excluded_paths=["/health", "/ready", "/docs", "/redoc", "/openapi.json"])
 
+    # Exception handlers
+    register_exception_handlers(app)
+
     # Routers
     # System routes (no prefix - root level)
     app.include_router(system_router, dependencies=[])
@@ -144,96 +128,3 @@ def create_app() -> FastAPI:
 
 # Create the app (this runs the init logic)
 app = create_app()
-
-
-def _map_agent_exception_to_status(exc: AgentException) -> int:
-    """Map AgentException to HTTP status code."""
-    # Client errors (4xx)
-    if isinstance(exc, BadRequestError):
-        return 400
-    if isinstance(exc, UnauthorizedError):
-        return 401
-    if isinstance(exc, ForbiddenError):
-        return 403
-    if isinstance(exc, (NotFoundError, NoResultsFoundError)):
-        return 404
-    if isinstance(exc, AgentCancelledError):
-        return 408
-    if isinstance(exc, ConflictError):
-        return 409
-    if isinstance(exc, DomainValidationError):
-        return 422
-    if isinstance(exc, (RateLimitedError, UpstreamRateLimitError)):
-        return 429
-
-    # Agent state errors (context-dependent)
-    if isinstance(exc, AgentStateError):
-        return 409 if exc.conflict else 500
-
-    # Agent runtime errors
-    if isinstance(exc, AgentTimeoutError):
-        return 504
-    if isinstance(exc, ToolExecutionError):
-        return 502 if exc.details.get("is_external", False) else 500
-
-    # Upstream errors (5xx)
-    if isinstance(exc, (UpstreamError, PromptLoadError)):
-        return 502
-    if isinstance(exc, UpstreamTimeoutError):
-        return 504
-
-    # Fallback
-    return 500
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler - maps all exceptions to HTTP responses."""
-    logger = structlog.get_logger(__name__)
-    trace_id = getattr(request.state, "trace_id", "unknown")
-
-    # Determine status code and error details
-    if isinstance(exc, AgentException):
-        status_code = _map_agent_exception_to_status(exc)
-        error_message = exc.message
-        error_details = exc.details
-    elif isinstance(exc, ValueError):
-        status_code = 400
-        error_message = f"Invalid value: {str(exc)}"
-        error_details = {}
-    elif isinstance(exc, KeyError):
-        status_code = 400
-        error_message = f"Missing required field: {str(exc)}"
-        error_details = {}
-    elif isinstance(exc, TimeoutError):
-        status_code = 504
-        error_message = "Request timed out"
-        error_details = {}
-    else:
-        # Unknown exceptions
-        status_code = 500
-        error_message = "Internal server error"
-        error_details = {}
-
-    # Log with full context
-    logger.error(
-        "exception handled",
-        trace_id=trace_id,
-        status_code=status_code,
-        error_type=type(exc).__name__,
-        error_message=error_message,
-        error_details=error_details,
-        exc_info=exc,
-    )
-
-    # Return JSON response
-    response_body = {
-        "error": error_message,
-        "trace_id": trace_id,
-        "details": error_details if error_details else None,
-    }
-
-    return JSONResponse(
-        status_code=status_code,
-        content=response_body,
-    )
