@@ -12,8 +12,12 @@ from typing import Literal
 from pydantic import ValidationError
 
 from agent_will_smith.infra.vector_search_client import VectorSearchClient
-from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult
-from agent_will_smith.agent.product_recommendation.schemas.database import ActivityDTO, BookDTO, ArticleDTO
+from agent_will_smith.agent.product_recommendation.model.product import ProductResult
+from agent_will_smith.agent.product_recommendation.repo.dto import (
+    ActivityDTO,
+    BookDTO,
+    ArticleDTO,
+)
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 from agent_will_smith.core.exceptions import UpstreamError
 import structlog

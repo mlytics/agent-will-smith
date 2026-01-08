@@ -7,7 +7,7 @@ Each endpoint maps to a single agent.
 from fastapi import APIRouter, Depends, Request
 import structlog
 
-from agent_will_smith.app.api.product_recommendation.dto.schemas import (
+from agent_will_smith.app.api.product_recommendation.dto import (
     RecommendProductsRequest,
     RecommendProductsResponse,
     ProductRecommendation,
@@ -16,7 +16,7 @@ from agent_will_smith.app.api.product_recommendation.dto.schemas import (
 from dependency_injector.wiring import inject, Provide
 from agent_will_smith.agent.product_recommendation.container import Container
 from agent_will_smith.agent.product_recommendation.agent import Agent
-from agent_will_smith.agent.product_recommendation.schemas.messages import AgentInput
+from agent_will_smith.agent.product_recommendation.state import AgentInput
 
 router = APIRouter()
 

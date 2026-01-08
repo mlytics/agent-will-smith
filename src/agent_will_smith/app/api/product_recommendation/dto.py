@@ -6,7 +6,7 @@ All API boundaries use Pydantic models for validation and documentation.
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
 
 
 class RecommendProductsRequest(BaseModel):
@@ -86,4 +86,3 @@ class RecommendProductsResponse(BaseModel):
         ..., description="Status: 'complete' if all verticals succeeded, 'partial' if some failed"
     )
     verticals_searched: list[str] = Field(..., description="List of verticals that were searched")
-

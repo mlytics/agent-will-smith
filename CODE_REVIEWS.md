@@ -1228,3 +1228,101 @@ class OutputNode:
 | IntentAnalysisNode | `intent_node` | `IntentNodeNamespace` | Internal processing |
 | ParallelSearchNode | `search_node` | `SearchNodeNamespace` | Internal processing |
 | **OutputNode** | **`output`** | **`AgentOutput` (DTO!)** | **API boundary** |
+
+## Schema Organization
+
+### Core Philosophy
+
+**Domain models live in dedicated `model/` folder. Clear separation between database DTOs and domain models. 
+
+This architecture provides:
+- **Domain layer**: Centralized location for all domain models
+- **Separation of concerns**: Database DTOs vs domain models clearly separated
+- **No circular dependencies**: Clean import hierarchy enforced by structure
+- **Better discoverability**: All domain entities in one place
+- **Scalability**: Easy to add new domain models
+
+### Rule 1: Domain Models in model/ Folder
+
+**Rule:** All domain models MUST live in `agent/<agent_name>/model/` folder. Database DTOs stay in `repo/dto.py`.
+
+```
+agent/product_recommendation/
+├── state.py              # State orchestration schemas
+├── model/                # Domain models
+│   ├── types.py          # Type definitions (VERTICALS)
+│   ├── product.py        # Domain models (ProductResult)
+│   └── namespaces.py     # Node namespace schemas
+├── node/
+│   └── intent_analysis_node.py
+└── repo/
+    ├── dto.py            # Database DTOs ONLY
+    └── product_vector_repository.py
+```
+
+**Clear separation:**
+
+| Location | Purpose | Examples |
+|----------|---------|----------|
+| `model/` | Domain models - business entities | ProductResult, IntentNodeNamespace, VERTICALS |
+| `repo/dto.py` | Database DTOs - raw external structures | ActivityDTO, BookDTO, ArticleDTO |
+| `state.py` | State orchestration | AgentInput, AgentOutput, AgentState |
+
+```python
+# ✅ CORRECT - Separated by purpose
+# model/product.py
+class ProductResult(BaseModel):
+    """Domain model for unified product representation."""
+    product_id: str
+    product_type: Literal["activity", "book", "article"]
+    title: str
+
+# repo/dto.py
+class ActivityDTO(BaseModel):
+    """Raw database structure from Databricks vector search."""
+    content_id: str
+    title: str
+    score: float
+
+# ❌ INCORRECT - Mixed concerns
+# repo/dto.py
+class ActivityDTO(BaseModel):
+    """Raw from database"""
+    content_id: str
+
+class ProductResult(BaseModel):
+    """Domain model - WRONG PLACE!"""
+    product_id: str
+```
+
+### Rule 2: Node Namespaces Centralized
+
+**Rule:** All node namespace schemas MUST live in `model/namespaces.py`, not in node files.
+
+```python
+# ✅ CORRECT - Centralized in model/namespaces.py
+from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.product import ProductResult
+
+class IntentNodeNamespace(BaseModel):
+    """State namespace for intent analysis node."""
+    intent: str = Field(..., min_length=10, max_length=1000)
+
+class SearchNodeNamespace(BaseModel):
+    """State namespace for parallel search node."""
+    results: dict[VERTICALS, list[ProductResult]] = Field(default_factory=dict)
+    status: Literal["complete", "partial"] = "complete"
+
+# ❌ INCORRECT - Defined in node file
+# node/intent_analysis_node.py
+class IntentNodeNamespace(BaseModel):  # Creates circular dependency risk
+    intent: str
+
+class IntentAnalysisNode:
+    ...
+```
+
+**Why centralized:**
+- **Prevents circular imports**: state.py imports namespaces, nodes import state
+- **Better discoverability**: All state schemas in one place
+- **Clear ownership**: Domain layer owns data structures, nodes own behavior

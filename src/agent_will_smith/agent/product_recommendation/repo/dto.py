@@ -1,7 +1,6 @@
-"""Database DTOs for vector search results.
+"""Database DTOs from Databricks vector search.
 
-These DTOs match the structure returned from Databricks vector search indices.
-They provide type safety and validation for raw search results.
+Raw structures returned from external data sources.
 """
 
 from pydantic import BaseModel, Field
@@ -21,7 +20,7 @@ class ActivityDTO(BaseModel):
     end_time: str | None = None
     permalink_url: str | None = None
     cover_image_urls: list[str] = Field(default_factory=list)
-    score: float = Field(default=0.0, description="Relevance score from vector search")
+    score: float = Field(default=0.0)
 
 
 class BookDTO(BaseModel):
@@ -36,7 +35,7 @@ class BookDTO(BaseModel):
     permalink_url: str | None = None
     cover_image_url: str | None = None
     prices: list[str] = Field(default_factory=list)
-    score: float = Field(default=0.0, description="Relevance score from vector search")
+    score: float = Field(default=0.0)
 
 
 class ArticleDTO(BaseModel):
@@ -44,7 +43,7 @@ class ArticleDTO(BaseModel):
     
     content_id: str
     title: str
-    content: str | None = None  # Full article text
+    content: str | None = None
     authors: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
@@ -52,5 +51,4 @@ class ArticleDTO(BaseModel):
     thumbnail_url: str | None = None
     main_image_url: str | None = None
     publish_time: str | None = None
-    score: float = Field(default=0.0, description="Relevance score from vector search")
-
+    score: float = Field(default=0.0)

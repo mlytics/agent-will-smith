@@ -15,12 +15,13 @@ import structlog
 import mlflow
 from langgraph.graph import StateGraph, START, END
 
-from agent_will_smith.agent.product_recommendation.schemas.state import (
+from agent_will_smith.agent.product_recommendation.state import (
     AgentState,
     AgentInputState,
     AgentOutputState,
+    AgentInput,
+    AgentOutput,
 )
-from agent_will_smith.agent.product_recommendation.schemas.messages import AgentInput, AgentOutput
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from agent_will_smith.agent.product_recommendation.node.output_node import OutputNode
