@@ -2,7 +2,8 @@
 
 Contains:
 - ProductResult: Domain model for search results (Pydantic for type safety)
-- AgentOutput: Final API response schema (converts ProductResult to dict at boundary)
+- AgentInput: Input DTO AND namespace model (dual purpose)
+- AgentOutput: Output DTO AND namespace model (dual purpose)
 
 All schemas use Pydantic for runtime validation and type safety.
 Namespaced state schemas are in schemas/state.py.
@@ -10,6 +11,7 @@ Namespaced state schemas are in schemas/state.py.
 
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
+from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
 
 
 class ProductResult(BaseModel):
@@ -31,16 +33,34 @@ class ProductResult(BaseModel):
 
 
 # =============================================================================
-# Agent Output Schema (API Boundary)
+# Agent Input/Output DTOs (Dual Purpose: Agent Boundary + State Namespace)
 # =============================================================================
 
+class AgentInput(BaseModel):
+    """Input DTO AND namespace model (dual purpose).
+
+    Used for:
+    1. agent.invoke() parameter type (API boundary)
+    2. state.input namespace (internal state)
+
+    Owner: Agent (from API request)
+    Lifecycle: Set once at start, never modified
+    """
+    article: str = Field(..., min_length=10)
+    question: str = Field(..., min_length=5)
+    k: int = Field(..., ge=1, le=10, description="Products per vertical")
+    verticals: list[VERTICALS]
+    customer_uuid: Optional[str] = None
+
+
 class AgentOutput(BaseModel):
-    """Final output from recommend_products agent.
+    """Output DTO AND namespace model (dual purpose).
 
-    This is the complete agent response with all information.
-    Validates the agent's final output before returning to API layer.
+    Used for:
+    1. agent.invoke() return type (API boundary)
+    2. state.output namespace (internal state)
 
-    Note: ProductResult objects are converted to dicts at this boundary.
+    Note: ProductResult objects are converted to dicts by OutputNode.
     """
     grouped_results: dict[str, list[dict]] = Field(..., description="Products grouped by vertical")
     total_products: int = Field(..., ge=0, description="Total products found")

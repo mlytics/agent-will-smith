@@ -16,6 +16,7 @@ from agent_will_smith.app.api.product_recommendation.dto.schemas import (
 from dependency_injector.wiring import inject, Provide
 from agent_will_smith.agent.product_recommendation.container import Container
 from agent_will_smith.agent.product_recommendation.agent import Agent
+from agent_will_smith.agent.product_recommendation.schemas.messages import AgentInput
 
 router = APIRouter()
 
@@ -69,15 +70,18 @@ async def recommend_products_endpoint(
         customer_uuid=body.customer_uuid,
     )
 
-    # Invoke agent - returns Pydantic AgentOutput
-    # Any exceptions will bubble to the global exception handler in main.py
-    agent_output = await agent.invoke(
+    # Create AgentInput DTO from request body
+    input_dto = AgentInput(
         article=body.article,
         question=body.question,
         k=body.k,
         verticals=body.product_types or ["activities", "books", "articles"],
         customer_uuid=body.customer_uuid,
     )
+
+    # Invoke agent with DTO - returns AgentOutput DTO
+    # Any exceptions will bubble to the global exception handler in main.py
+    agent_output = await agent.invoke(input_dto)
 
     # Transform grouped results to API response format
     verticals_searched = body.product_types or ["activities", "books", "articles"]

@@ -12,25 +12,13 @@ See schemas/messages.py for additional agent schemas.
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 from agent_will_smith.agent.product_recommendation.schemas.types import VERTICALS
-from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult
+from agent_will_smith.agent.product_recommendation.schemas.messages import ProductResult, AgentInput, AgentOutput
 
 
 # ============================================================================
-# NAMESPACE MODELS (Sub-states for each node)
+# NAMESPACE MODELS (Internal node namespaces)
 # ============================================================================
-
-class InputsNamespace(BaseModel):
-    """
-    Namespace: inputs
-    Owner: Agent (from API request)
-    Lifecycle: Set once at start, never modified
-    """
-    article: str = Field(..., min_length=10)
-    question: str = Field(..., min_length=5)
-    k: int = Field(..., ge=1, le=10, description="Products per vertical")
-    verticals: list[VERTICALS]
-    customer_uuid: Optional[str] = None
-
+# Note: AgentInput and AgentOutput (dual-purpose DTOs) are in messages.py
 
 class IntentNodeNamespace(BaseModel):
     """
@@ -66,18 +54,18 @@ class SearchNodeNamespace(BaseModel):
     )
 
 
-class ComposeNodeNamespace(BaseModel):
-    """
-    Namespace: compose_node
-    Owner: ComposeResponseNode
-    Lifecycle: Written once by compose_response_node
-    """
-    # Final curated results (top K, sorted)
-    grouped_results: dict[VERTICALS, list[ProductResult]] = Field(
-        default_factory=dict,
-        description="Top K products per vertical, sorted by relevance (Pydantic objects)"
-    )
-    total_products: int = 0
+# ============================================================================
+# LANGGRAPH INPUT/OUTPUT STATE SCHEMAS (Subsets of AgentState)
+# ============================================================================
+
+class AgentInputState(BaseModel):
+    """Input schema for LangGraph - declares which fields are inputs."""
+    input: AgentInput  # Singular!
+
+
+class AgentOutputState(BaseModel):
+    """Output schema for LangGraph - declares which fields are outputs."""
+    output: AgentOutput  # Singular!
 
 
 # ============================================================================
@@ -85,8 +73,7 @@ class ComposeNodeNamespace(BaseModel):
 # ============================================================================
 
 class AgentState(BaseModel):
-    """
-    Main LangGraph state with explicit node namespaces.
+    """Main LangGraph state with namespaced architecture.
 
     Architecture:
     - Each namespace is owned by one node
@@ -94,7 +81,13 @@ class AgentState(BaseModel):
     - Nodes can READ from any namespace
 
     Data Flow:
-    inputs → intent_node → search_node → compose_node
+    input → intent_node → search_node → output
+
+    Namespaces:
+    - input: AgentInput DTO (special - dual purpose)
+    - intent_node: Intent analysis output (IntentNodeNamespace)
+    - search_node: Search results (SearchNodeNamespace)
+    - output: AgentOutput DTO (special - dual purpose)
 
     Benefits of Pydantic state:
     - Runtime validation at every state update
@@ -103,12 +96,10 @@ class AgentState(BaseModel):
     - Clear ownership via namespaces
     """
 
-    # Node namespaces
-    inputs: InputsNamespace
+    # Input/output namespaces (dual-purpose DTOs)
+    input: AgentInput  # SINGULAR! (not inputs)
+    output: Optional[AgentOutput] = None  # SINGULAR! Written by OutputNode
+
+    # Internal node namespaces
     intent_node: Optional[IntentNodeNamespace] = None
     search_node: Optional[SearchNodeNamespace] = None
-    compose_node: Optional[ComposeNodeNamespace] = None
-
-    class Config:
-        # Allow arbitrary types for LangGraph compatibility
-        arbitrary_types_allowed = True

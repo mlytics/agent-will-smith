@@ -1,5 +1,16 @@
 # Code Guidelines & Review Rules
 
+Pretend you're a senior software architect doing a code review and you HATE this implementation.
+
+The following is a list of rules specifically for this repo to follow strictly.
+
+Besides the rules
+- what would you criticize? Refer to the best practices and software engineering principles.
+- what edge cases are missing?
+
+**Don't just insepct if the code follows the rules.**
+**Also criticize the code based on the best practices and software engineering principles.**
+
 ## Naming Conventions
 
 ### File and Class Naming
@@ -924,10 +935,10 @@ This architecture provides:
 ```python
 # ✅ CORRECT - Namespaced state structure
 class AgentState(BaseModel):
-    inputs: InputsNamespace                      # API request data
+    input: AgentInput                            # API input DTO (dual purpose!)
     intent_node: Optional[IntentNodeNamespace] = None
     search_node: Optional[SearchNodeNamespace] = None
-    compose_node: Optional[ComposeNodeNamespace] = None
+    output: Optional[AgentOutput] = None         # API output DTO (dual purpose!)
 
 # ❌ INCORRECT - Flat state (unclear ownership)
 class AgentState(BaseModel):
@@ -960,7 +971,7 @@ class SearchNodeNamespace(BaseModel):
 class IntentAnalysisNode:
     def __call__(self, state: AgentState) -> dict:
         # Read from any namespace
-        article = state.inputs.article
+        article = state.input.article
 
         # Write ONLY to own namespace
         return {
@@ -1002,40 +1013,218 @@ score = product["relevance_score"]  # ❌ No autocomplete, typo risk
 
 **API boundary conversion:**
 ```python
-# ✅ CORRECT - Convert to dict only at API boundary
-def invoke(...) -> AgentOutput:
-    # State has Pydantic objects
-    final_state = AgentState(**state_dict)
+# ✅ CORRECT - Convert to dict only in OutputNode
+class OutputNode:
+    def __call__(self, state: AgentState) -> dict:
+        # State has Pydantic objects throughout workflow
+        search_results = state.search_node.results  # dict[VERTICALS, list[ProductResult]]
 
-    # Convert to dict for API response
-    grouped_dicts = {
-        vertical: [p.model_dump() for p in products]
-        for vertical, products in final_state.compose_node.grouped_results.items()
-    }
+        # Convert ProductResult → dict (ONLY place in codebase!)
+        grouped_dicts = {
+            vertical: [p.model_dump() for p in products]
+            for vertical, products in search_results.items()
+        }
 
-    return AgentOutput(grouped_results=grouped_dicts)
+        # Write AgentOutput DTO with dict results
+        return {"output": AgentOutput(grouped_results=grouped_dicts)}
+
+# Agent invoke() returns the DTO directly
+async def invoke(input_dto: AgentInput) -> AgentOutput:
+    output_dict = await self.graph.ainvoke(AgentState(input=input_dto))
+    return AgentOutputState(**output_dict).output  # Returns AgentOutput DTO
 ```
 
 ### Rule 4: Namespace Naming Convention
 
 **Rule:** Follow consistent naming patterns for namespaces.
 
-| Namespace | Format | Example | Owner |
-|-----------|--------|---------|-------|
-| Input data | `inputs` | `inputs: InputsNamespace` | Agent (from API) |
-| Node output | `{node_name}_node` | `intent_node: Optional[IntentNodeNamespace]` | Specific node |
+| Namespace | Format | Example | Owner | Notes |
+|-----------|--------|---------|-------|-------|
+| Input DTO | `input` | `input: AgentInput` | Agent (from API) | Dual-purpose: DTO + namespace |
+| Output DTO | `output` | `output: Optional[AgentOutput]` | OutputNode | Dual-purpose: DTO + namespace |
+| Node output | `{node_name}_node` | `intent_node: Optional[IntentNodeNamespace]` | Specific node | Internal namespace only |
 
 ```python
 # ✅ CORRECT - Consistent naming
 class AgentState(BaseModel):
-    inputs: InputsNamespace                      # Reserved name
+    input: AgentInput                            # Singular! Dual-purpose DTO
     intent_node: Optional[IntentNodeNamespace]   # {node_name}_node
     search_node: Optional[SearchNodeNamespace]
-    compose_node: Optional[ComposeNodeNamespace]
+    output: Optional[AgentOutput]                # Singular! Dual-purpose DTO
 
 # ❌ INCORRECT - Inconsistent naming
 class AgentState(BaseModel):
-    input_data: InputsNamespace        # Should be 'inputs'
+    inputs: InputsNamespace            # Should be 'input' (singular)
+    input_data: AgentInput             # Should be 'input'
     intent: IntentNamespace            # Missing '_node' suffix
     search_results: SearchNamespace    # Should be 'search_node'
+    outputs: AgentOutput               # Should be 'output' (singular)
 ```
+
+### Rule 5: Dual-Purpose DTOs for Input/Output
+
+**Rule:** `AgentInput` and `AgentOutput` serve two distinct purposes:
+1. **API boundary DTOs**: Type annotations for `agent.invoke(input_dto) -> AgentOutput`
+2. **State namespace models**: Live directly in `state.input` and `state.output`
+
+This eliminates conversion overhead and simplifies the architecture.
+
+```python
+# ✅ CORRECT - Dual-purpose DTOs
+class AgentInput(BaseModel):
+    """Input DTO AND namespace model (dual purpose).
+
+    Used for:
+    1. agent.invoke() parameter type (API boundary)
+    2. state.input namespace (internal state)
+    """
+    article: str
+    question: str
+    k: int
+    verticals: list[VERTICALS]
+
+class AgentOutput(BaseModel):
+    """Output DTO AND namespace model (dual purpose).
+
+    Used for:
+    1. agent.invoke() return type (API boundary)
+    2. state.output namespace (internal state)
+    """
+    grouped_results: dict[str, list[dict]]
+    total_products: int
+    status: Literal["complete", "partial"]
+
+# Agent usage - no conversion needed!
+async def invoke(self, input_dto: AgentInput) -> AgentOutput:
+    # Create state directly with DTO (dual purpose!)
+    initial_state = AgentState(input=input_dto)
+
+    # Run graph
+    output_dict = await self.graph.ainvoke(initial_state)
+
+    # Return DTO directly from state
+    return AgentOutputState(**output_dict).output
+
+# ❌ INCORRECT - Separate DTO and namespace models
+class AgentInput(BaseModel):
+    """API DTO only"""
+    article: str
+
+class InputsNamespace(BaseModel):
+    """Separate internal model"""
+    article: str
+
+async def invoke(self, input_dto: AgentInput) -> AgentOutput:
+    # FORBIDDEN! Unnecessary conversion
+    initial_state = AgentState(
+        inputs=InputsNamespace(**input_dto.model_dump())
+    )
+```
+
+**Benefits:**
+- **No conversion overhead**: DTOs flow directly into state
+- **Single source of truth**: One model for both API and state
+- **Simplified code**: No InputsNamespace ↔ AgentInput mappings
+- **Type safety**: Same validation at API and state level
+
+### Rule 6: LangGraph Input/Output State Schemas
+
+**Rule:** LangGraph StateGraph requires `input_schema` and `output_schema` to validate and filter state fields. Create thin wrapper schemas that reference the dual-purpose DTOs.
+
+```python
+# ✅ CORRECT - Thin state schemas for LangGraph
+class AgentInputState(BaseModel):
+    """Input schema for LangGraph - declares which fields are inputs."""
+    input: AgentInput  # References the dual-purpose DTO
+
+class AgentOutputState(BaseModel):
+    """Output schema for LangGraph - declares which fields are outputs."""
+    output: AgentOutput  # References the dual-purpose DTO
+
+# Configure StateGraph
+workflow = StateGraph(
+    AgentState,
+    input_schema=AgentInputState,   # Validates input field exists
+    output_schema=AgentOutputState,  # Returns only output field
+)
+
+# ❌ INCORRECT - Flattening fields to top-level
+class AgentInputState(BaseModel):
+    """Don't flatten - breaks namespace architecture!"""
+    article: str
+    question: str
+    k: int
+```
+
+**Why separate schemas:**
+- **Namespace preservation**: Keep namespaced architecture intact
+- **LangGraph validation**: Framework validates input/output fields exist
+- **Filtered output**: LangGraph returns only output field (via output_schema)
+- **Clear contracts**: Explicit declaration of what flows in/out
+
+**Schema relationship:**
+```
+AgentState (full state)
+├── input: AgentInput          ← Declared in AgentInputState
+├── intent_node: ...           ← Internal, not in input/output schemas
+├── search_node: ...           ← Internal, not in input/output schemas
+└── output: AgentOutput        ← Declared in AgentOutputState
+```
+
+### Rule 7: Output Node is Special
+
+**Rule:** The OutputNode is unique - it's the ONLY node that writes a DTO (not an internal namespace model) to state.
+
+```python
+# ✅ CORRECT - OutputNode writes AgentOutput DTO directly
+class OutputNode:
+    """Output node that writes AgentOutput DTO to state.output."""
+
+    def __call__(self, state: AgentState) -> dict:
+        # Read from internal namespaces
+        verticals = state.input.verticals  # Singular!
+        search_results = state.search_node.results
+
+        # Compose and transform data
+        grouped_results_pydantic: dict[VERTICALS, list[ProductResult]] = {}
+        for vertical in verticals:
+            products = search_results.get(vertical, [])
+            sorted_products = sorted(products, key=lambda p: p.relevance_score, reverse=True)
+            grouped_results_pydantic[vertical] = sorted_products[:state.input.k]
+
+        # Convert ProductResult → dict (ONLY place in codebase!)
+        grouped_results_dict = {
+            vertical: [p.model_dump() for p in products]
+            for vertical, products in grouped_results_pydantic.items()
+        }
+
+        # Write AgentOutput DTO to output namespace (SPECIAL!)
+        return {
+            "output": AgentOutput(
+                grouped_results=grouped_results_dict,
+                total_products=sum(len(p) for p in grouped_results_pydantic.values()),
+                status=state.search_node.status,
+            )
+        }
+
+# ❌ INCORRECT - Writing internal namespace model
+class OutputNode:
+    def __call__(self, state: AgentState) -> dict:
+        return {
+            "output_node": OutputNodeNamespace(...)  # NO! Should write DTO
+        }
+```
+
+**Why OutputNode is special:**
+- **API boundary**: Bridges internal state to API response
+- **Single transformation point**: Only place where Pydantic → dict conversion happens
+- **DTO writer**: Unlike other nodes, writes DTO directly to state
+- **No intermediate namespace**: Skips OutputNodeNamespace pattern
+
+**Pattern comparison:**
+
+| Node Type | Writes To | Model Type | Purpose |
+|-----------|-----------|------------|---------|
+| IntentAnalysisNode | `intent_node` | `IntentNodeNamespace` | Internal processing |
+| ParallelSearchNode | `search_node` | `SearchNodeNamespace` | Internal processing |
+| **OutputNode** | **`output`** | **`AgentOutput` (DTO!)** | **API boundary** |

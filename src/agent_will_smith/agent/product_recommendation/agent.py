@@ -15,11 +15,15 @@ import structlog
 import mlflow
 from langgraph.graph import StateGraph, START, END
 
-from agent_will_smith.agent.product_recommendation.schemas.state import AgentState, InputsNamespace
-from agent_will_smith.agent.product_recommendation.schemas.messages import AgentOutput
+from agent_will_smith.agent.product_recommendation.schemas.state import (
+    AgentState,
+    AgentInputState,
+    AgentOutputState,
+)
+from agent_will_smith.agent.product_recommendation.schemas.messages import AgentInput, AgentOutput
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
-from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
+from agent_will_smith.agent.product_recommendation.node.output_node import OutputNode
 from agent_will_smith.agent.product_recommendation.config import ProductRecommendationAgentConfig
 
 
@@ -36,7 +40,7 @@ class Agent:
         self,
         intent_analysis_node: IntentAnalysisNode,
         parallel_search_node: ParallelSearchNode,
-        compose_response_node: ComposeResponseNode,
+        output_node: OutputNode,  # RENAMED from compose_response_node
         agent_config: ProductRecommendationAgentConfig,
     ):
         """Initialize agent with injected node instances.
@@ -44,47 +48,40 @@ class Agent:
         Args:
             intent_analysis_node: Node for analyzing user intent
             parallel_search_node: Node for parallel vector search
-            compose_response_node: Node for composing final response
+            output_node: Node for creating output DTO
             agent_config: Agent configuration for metadata and tracing
         """
         self.logger = structlog.get_logger(__name__)
         self.agent_config = agent_config
 
-        # Build workflow graph
-        workflow = StateGraph[AgentState, None, AgentState, AgentState](AgentState)
+        # Build workflow graph with input/output schemas
+        workflow = StateGraph(
+            AgentState,
+            input_schema=AgentInputState,   # NEW: Validates input field exists
+            output_schema=AgentOutputState,  # NEW: Returns only output field
+        )
         workflow.add_node("intent_analysis_node", intent_analysis_node)
         workflow.add_node("parallel_search_node", parallel_search_node)
-        workflow.add_node("compose_response_node", compose_response_node)
+        workflow.add_node("output_node", output_node)  # RENAMED
 
         # Define flow
         workflow.add_edge(START, "intent_analysis_node")
         workflow.add_edge("intent_analysis_node", "parallel_search_node")
-        workflow.add_edge("parallel_search_node", "compose_response_node")
-        workflow.add_edge("compose_response_node", END)
+        workflow.add_edge("parallel_search_node", "output_node")  # UPDATED
+        workflow.add_edge("output_node", END)  # UPDATED
 
         self.graph = workflow.compile()
         self.logger.info("product recommendation agent initialized")
 
     @mlflow.trace(name="product_recommendation_agent")
-    async def invoke(
-        self,
-        article: str,
-        question: str,
-        k: int,
-        verticals: list[str],
-        customer_uuid: Optional[str] = None,
-    ) -> AgentOutput:
-        """Run the agent with the given inputs.
+    async def invoke(self, input_dto: AgentInput) -> AgentOutput:
+        """Run the agent with the given input DTO.
 
         Args:
-            article: Article text to analyze
-            question: Question to guide recommendations
-            k: Number of products per vertical
-            verticals: Which verticals to search
-            customer_uuid: Optional customer UUID for filtering
+            input_dto: AgentInput with validated fields
 
         Returns:
-            AgentOutput with grouped results
+            AgentOutput DTO with grouped results
 
         Note:
             This method is safe for concurrent API requests.
@@ -100,52 +97,33 @@ class Agent:
 
         self.logger.info(
             "execution started",
-            article_length=len(article),
-            question_length=len(question),
-            verticals=verticals,
-            k=k,
-            customer_uuid=customer_uuid,
+            article_length=len(input_dto.article),
+            question_length=len(input_dto.question),
+            verticals=input_dto.verticals,
+            k=input_dto.k,
+            customer_uuid=input_dto.customer_uuid,
         )
 
-        # Create initial state with only inputs namespace
-        initial_state = AgentState(
-            inputs=InputsNamespace(
-                article=article,
-                question=question,
-                k=k,
-                verticals=verticals,
-                customer_uuid=customer_uuid,
-            )
-        )
+        # Create initial state with input namespace (singular!)
+        # AgentInput serves dual purpose - no conversion needed!
+        initial_state = AgentState(input=input_dto)
 
-        # Run graph (nodes will populate other namespaces)
-        final_state_dict = await self.graph.ainvoke(initial_state)
-        final_state = AgentState(**final_state_dict)
+        # Run graph (LangGraph validates input/output schemas)
+        output_state_dict = await self.graph.ainvoke(initial_state)
 
-        # Validate that all required namespaces were populated
-        if final_state.compose_node is None:
-            raise ValueError("compose_node did not execute")
-        if final_state.intent_node is None:
-            raise ValueError("intent_node did not execute")
-        if final_state.search_node is None:
-            raise ValueError("search_node did not execute")
+        # LangGraph returns dict with only output field (via output_schema)
+        # Convert to AgentOutputState for type safety
+        output_state = AgentOutputState(**output_state_dict)
+
+        # Validate output was populated
+        if output_state.output is None:
+            raise ValueError("output node did not execute")
 
         self.logger.info(
             "execution completed",
-            total_products=final_state.compose_node.total_products,
-            status=final_state.search_node.status,
+            total_products=output_state.output.total_products,
+            status=output_state.output.status,
         )
 
-        # Convert ProductResult → dict for API response (only at boundary!)
-        grouped_dicts = {
-            vertical: [p.model_dump() for p in products]
-            for vertical, products in final_state.compose_node.grouped_results.items()
-        }
-
-        return AgentOutput(
-            grouped_results=grouped_dicts,
-            total_products=final_state.compose_node.total_products,
-            status=final_state.search_node.status,
-            errors=final_state.search_node.errors,
-            intent=final_state.intent_node.intent,
-        )
+        # Return AgentOutput DTO
+        return output_state.output

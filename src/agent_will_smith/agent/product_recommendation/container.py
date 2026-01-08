@@ -11,7 +11,7 @@ from agent_will_smith.agent.product_recommendation.config import ProductRecommen
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
-from agent_will_smith.agent.product_recommendation.node.compose_response_node import ComposeResponseNode
+from agent_will_smith.agent.product_recommendation.node.output_node import OutputNode
 from agent_will_smith.agent.product_recommendation.agent import Agent
 
 
@@ -21,7 +21,7 @@ class Container(containers.DeclarativeContainer):
     Follows the joke_agent pattern with layered dependencies:
     1. Infrastructure (shared clients from InfraContainer)
     2. Repository (product-specific logic)
-    3. Nodes (IntentAnalysisNode, ParallelSearchNode, ComposeResponseNode)
+    3. Nodes (IntentAnalysisNode, ParallelSearchNode, OutputNode)
     4. Agent (Agent)
     """
 
@@ -74,9 +74,9 @@ class Container(containers.DeclarativeContainer):
         agent_config=agent_config,
     )
 
-    # Node layer - Compose response
-    compose_response_node: providers.Provider[ComposeResponseNode] = providers.Singleton(
-        ComposeResponseNode,
+    # Node layer - Output node
+    output_node: providers.Provider[OutputNode] = providers.Singleton(
+        OutputNode,
     )
 
     # Agent layer - Product recommendation agent (Factory for flexibility)
@@ -84,6 +84,6 @@ class Container(containers.DeclarativeContainer):
         Agent,
         intent_analysis_node=intent_analysis_node,
         parallel_search_node=parallel_search_node,
-        compose_response_node=compose_response_node,
+        output_node=output_node,
         agent_config=agent_config,
     )
