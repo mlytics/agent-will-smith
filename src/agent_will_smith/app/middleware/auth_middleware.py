@@ -1,4 +1,4 @@
-"""Authentication middleware for Bearer token validation (pure ASGI)."""
+"""Authentication middleware for x-api-key header validation (pure ASGI)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from agent_will_smith.core.container import Container
 class AuthMiddleware:
     """Authentication middleware using Dependency Injection (pure ASGI).
 
-    Enforces Bearer token authentication on all HTTP routes except excluded ones.
+    Enforces x-api-key authentication on all HTTP routes except excluded ones.
     """
 
     @inject
@@ -34,23 +34,20 @@ class AuthMiddleware:
             return
 
         headers = Headers(scope=scope)
-        auth = headers.get("authorization")
+        api_key = headers.get("x-api-key")
 
-        if not auth or not auth.startswith("Bearer "):
+        if not api_key:
             res = JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Missing or invalid Authorization header"},
-                headers={"WWW-Authenticate": "Bearer"},
+                content={"detail": "Missing x-api-key header"},
             )
             await res(scope, receive, send)
             return
 
-        token = auth.split(" ", 1)[1].strip()
-        if token != self.api_key:
+        if api_key != self.api_key:
             res = JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Invalid API key"},
-                headers={"WWW-Authenticate": "Bearer"},
             )
             await res(scope, receive, send)
             return
