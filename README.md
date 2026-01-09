@@ -11,6 +11,92 @@ Production-grade AI agent platform built with LangGraph, Databricks, and FastAPI
 | **MLFlow** | Prompt versioning and LLM tracing |
 | **FastAPI** | HTTP API with auto-generated docs at `/docs` |
 
+
+## Quick Start
+
+### Prerequisites
+
+**Required:**
+- Python 3.14+
+- [uv](https://github.com/astral-sh/uv) package manager (required - do not use pip)
+- Databricks workspace with:
+  - OAuth Service Principal (client ID + secret) or CLI profile configured
+  - Vector search endpoint with configured indexes
+  - LLM serving endpoint (Databricks Foundation Models or external)
+  - MLFlow experiment for tracing
+  - Prompt registered in MLFlow prompt registry
+- Docker & Docker Compose for containerized deployment
+
+### 1. Setup
+
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup environment
+cd agent-will-smith
+cp .env.example .env
+```
+
+### 2. Configure
+
+Edit `.env` with your Databricks credentials and endpoints. All variables use namespaced prefixes:
+- `CORE_*` - Shared configuration (Databricks, MLFlow, FastAPI, logging)
+- `AGENT_*` - Agent-specific configuration (prompts, LLM, vector search indexes)
+
+**Minimum required configuration:**
+
+```bash
+# Databricks Authentication (choose one method)
+CORE_DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
+CORE_DATABRICKS_CLIENT_ID=your-oauth-client-id          # Production (OAuth)
+CORE_DATABRICKS_CLIENT_SECRET=your-oauth-client-secret  # Production (OAuth)
+# OR
+CORE_DATABRICKS_CONFIG_PROFILE=default                  # Development (CLI)
+
+# FastAPI
+CORE_FASTAPI_VERSION=0.1.0
+CORE_FASTAPI_API_KEY=your-secure-api-key                # Generate: openssl rand -hex 32
+CORE_FASTAPI_ENABLE_DOCS=true                           # Enable /docs endpoint
+
+# MLFlow
+CORE_MLFLOW_TRACKING_URI=databricks
+CORE_MLFLOW_EXPERIMENT_ID=your-experiment-id
+CORE_MLFLOW_ENABLE_TRACING=true
+
+# Agent Configuration (example for product_recommendation)
+AGENT_PRODUCT_RECOMMENDATION_AGENT_NAME=product_recommendation
+AGENT_PRODUCT_RECOMMENDATION_AGENT_VERSION=1.0.0
+AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT=databricks-gpt-4o-mini
+AGENT_PRODUCT_RECOMMENDATION_PROMPT_NAME=prompts:/your_catalog.schema.prompt_name/1
+# ... (see .env.example for complete agent configuration)
+```
+
+**Need detailed setup instructions?** See the [Configuration](#configuration) section below for:
+- How to obtain Databricks OAuth credentials or set up CLI profile
+- Creating MLflow experiments and registering prompts
+- Setting up LLM serving endpoints and vector search indexes
+- Complete environment variable reference with validation rules
+
+### 3. Run
+
+```bash
+# Install dependencies
+uv sync
+
+# Run the application
+docker-compose up
+
+# Or uv
+uv run uvicorn agent_will_smith.main:app --reload --host 0.0.0.0 --port 8000
+
+
+```
+
+Visit `http://localhost:8000/docs` for interactive API documentation (requires `CORE_FASTAPI_ENABLE_DOCS=true` in `.env`).
+
+
+
 ## Architecture
 
 The main architectural problem this codebase solves is not scale, but change:
@@ -291,6 +377,48 @@ For developers: no manual passing. Just `logger.info()` — context propagates a
 
 ---
 
+### 8. Configuration Management — Agent Isolation Through Namespacing
+
+**The failure scenario:**
+
+You add Agent B that needs different LLM settings. You modify the shared `config.py` to add a `use_claude` flag. Agent A starts failing because it reads the same config. You add `if agent_name == "B"` conditionals. Now every agent knows about every other agent. Six months later, someone removes Agent B but forgets to update the conditionals. Prod breaks silently.
+
+Or worse: you typo `databrics_host` in the `.env` file. Python's dynamic typing lets it through locally. The error only surfaces in production after deployment, crashing on startup.
+
+**How this repo prevents it:**
+
+Two-tier **namespaced environment variables** with Pydantic validation at startup:
+
+```python
+# Agent A reads only AGENT_PRODUCT_RECOMMENDATION_* variables
+class ProductRecommendationConfig(BaseAgentConfig):
+    model_config = SettingsConfigDict(env_prefix="AGENT_PRODUCT_RECOMMENDATION_")
+    llm_endpoint: str  # Reads AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT
+    
+# Agent B reads only AGENT_CONTENT_MODERATION_* variables  
+class ContentModerationConfig(BaseAgentConfig):
+    model_config = SettingsConfigDict(env_prefix="AGENT_CONTENT_MODERATION_")
+    llm_endpoint: str  # Reads AGENT_CONTENT_MODERATION_LLM_ENDPOINT
+```
+
+**Namespace layers:**
+- `CORE_*` → Shared infrastructure (Databricks auth, MLflow, FastAPI, logging)
+- `AGENT_<NAME>_*` → Agent-specific (prompts, LLM endpoints, indexes, behavior)
+
+**What this prevents:**
+- Configuration drift between agents (each has isolated namespace in `.env`)
+- Cross-agent pollution (Agent A physically cannot read Agent B's variables)
+- Runtime typos (`databrics_host` → Pydantic fails at startup with clear error)
+- Conditional logic (`if agent_name ==` becomes structurally impossible)
+
+**Extending:** Copy `agent/product_recommendation/` → `agent/new_agent/`, change `env_prefix` in `config.py`, add `AGENT_NEW_AGENT_*` variables to `.env`. Zero shared config changes. Zero risk to existing agents.
+
+*(Principle: Namespace Isolation — configuration boundaries prevent hidden coupling between agents)*
+
+**Next step:** When adding an agent, inherit from `BaseAgentConfig`, set unique `env_prefix`, add namespaced variables to `.env`
+
+---
+
 ## If You Are...
 
 **Adding a new agent:**
@@ -358,98 +486,6 @@ agent-will-smith/
 └── docker-compose.yml
 ```
 
-## Quick Start
-
-### Prerequisites
-
-**Required:**
-- Python 3.14+
-- [uv](https://github.com/astral-sh/uv) package manager (required - do not use pip)
-- Databricks workspace with:
-  - OAuth Service Principal (client ID + secret) or CLI profile configured
-  - Vector search endpoint with configured indexes
-  - LLM serving endpoint (Databricks Foundation Models or external)
-  - MLFlow experiment for tracing
-  - Prompt registered in MLFlow prompt registry
-
-**Optional:**
-- Docker & Docker Compose for containerized deployment
-
-### 1. Setup
-
-```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and setup environment
-cd agent-will-smith
-cp .env.example .env
-```
-
-### 2. Configure
-
-Edit `.env` with your Databricks credentials and endpoints. All variables use namespaced prefixes:
-- `CORE_*` - Shared configuration (Databricks, MLFlow, FastAPI, logging)
-- `AGENT_*` - Agent-specific configuration (prompts, LLM, vector search indexes)
-
-**Critical environment variables to configure:**
-
-**Databricks Authentication:**
-```bash
-CORE_DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-CORE_DATABRICKS_CLIENT_ID=your-oauth-client-id
-CORE_DATABRICKS_CLIENT_SECRET=your-oauth-client-secret
-```
-
-**FastAPI:**
-```bash
-CORE_FASTAPI_VERSION=0.1.0
-CORE_FASTAPI_API_KEY=your-secure-api-key
-CORE_FASTAPI_ENABLE_DOCS=true  # Set to true to enable /docs endpoint
-```
-
-**MLFlow:**
-```bash
-CORE_MLFLOW_EXPERIMENT_ID=your-experiment-id
-CORE_MLFLOW_ENABLE_TRACING=true
-```
-
-See `.env.example` for the complete list of required variables including agent-specific prompts, LLM endpoints, and vector search indexes.
-
-### 3. Run
-
-```bash
-# Install dependencies
-uv sync
-
-# Run the application
-uv run uvicorn agent_will_smith.main:app --reload --host 0.0.0.0 --port 8000
-
-# Or using Docker
-docker-compose up
-```
-
-Visit `http://localhost:8000/docs` for interactive API documentation (requires `CORE_FASTAPI_ENABLE_DOCS=true` in `.env`).
-
-## Development
-
-### Install Dependencies
-
-```bash
-# Using uv (required)
-uv sync
-```
-
-### Docker
-
-```bash
-# Build
-docker build -t agent-will-smith:latest .
-
-# Run
-docker run -p 8000:8000 --env-file .env agent-will-smith:latest
-```
-
 ## Code Guidelines
 
 **[`CODE_REVIEWS.md`](CODE_REVIEWS.md)** is the single source of truth for coding standards in this repo.
@@ -467,13 +503,390 @@ Example prompt: "Review this code against CODE_REVIEWS.md, specifically the
 Exception Handling and LangGraph State Schema sections"
 ```
 
-### What's Covered
 
-| Section | What You'll Learn |
-|---------|-------------------|
-| Naming Conventions | File/class naming, import style, package structure |
-| Dependency Injection | Container patterns, singleton management, wiring |
-| Exception Handling | 7 rules for consistent error handling |
-| Configuration | Namespaced env vars, 12-factor compliance |
-| LangGraph State | Namespace ownership, Pydantic throughout, dual-purpose DTOs |
-| Schema Organization | Where domain models vs DTOs belong |
+## Configuration
+
+Complete reference for all configuration options. All settings are managed through environment variables in `.env` with Pydantic validation at startup.
+
+> **Quick Start**: If you haven't set up your `.env` file yet, start with the [Quick Start](#quick-start) section above.
+
+**Configuration structure:**
+- `CORE_*` prefix → Shared infrastructure (Databricks, MLflow, FastAPI, logging)
+- `AGENT_<NAME>_*` prefix → Agent-specific settings (isolated per agent)
+
+---
+
+### 1. Databricks Configuration
+
+**Environment Variable Prefix**: `CORE_DATABRICKS_*`  
+**Configuration Class**: [`DatabricksConfig`](src/agent_will_smith/core/config/databricks_config.py)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CORE_DATABRICKS_HOST` | ✅ | - | Workspace URL (e.g., `https://your-workspace.cloud.databricks.com`) |
+| `CORE_DATABRICKS_CLIENT_ID` | ⚠️ | - | OAuth client ID (production authentication) |
+| `CORE_DATABRICKS_CLIENT_SECRET` | ⚠️ | - | OAuth client secret (production authentication) |
+| `CORE_DATABRICKS_CONFIG_PROFILE` | ⚠️ | - | CLI profile name (development authentication) |
+
+⚠️ = Must provide **EITHER** (client_id + client_secret) **OR** config_profile
+
+**Authentication Options:**
+
+**Option A: OAuth Service Principal (Recommended for Production)**
+
+1. Open Databricks Console → **Settings** → **Identity and Access**
+2. Navigate to **Service Principals** → **Add service principal**
+3. Create service principal and copy the **Client ID** → Set as `CORE_DATABRICKS_CLIENT_ID`
+4. Click **Generate secret** → Copy the secret → Set as `CORE_DATABRICKS_CLIENT_SECRET`
+5. Grant necessary workspace permissions to the service principal
+
+📚 [Databricks OAuth M2M Authentication Guide](https://docs.databricks.com/en/dev-tools/auth/oauth-m2m.html)
+
+**Option B: Config Profile (For Local Development)**
+
+1. Install Databricks CLI: `pip install databricks-cli`
+2. Run authentication command:
+   ```bash
+   databricks configure --profile my-profile
+   ```
+3. Follow prompts to enter workspace URL and credentials
+4. Set environment variable:
+   ```bash
+   CORE_DATABRICKS_CONFIG_PROFILE=my-profile
+   ```
+
+📚 [Databricks CLI Authentication Guide](https://docs.databricks.com/en/dev-tools/cli/authentication.html)
+
+**Validation:**
+- Configuration fails at startup if neither authentication method is provided
+- Automatically sets `DATABRICKS_*` environment variables for SDK compatibility
+
+---
+
+### 2. MLflow Configuration
+
+**Environment Variable Prefix**: `CORE_MLFLOW_*`  
+**Configuration Class**: [`MLFlowConfig`](src/agent_will_smith/core/config/mlflow_config.py)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CORE_MLFLOW_TRACKING_URI` | ⚠️ | - | MLflow tracking server URI (typically `databricks`) |
+| `CORE_MLFLOW_REGISTRY_URI` | ⚠️ | - | Model registry URI (typically `databricks-uc` for Unity Catalog) |
+| `CORE_MLFLOW_EXPERIMENT_ID` | ⚠️ | - | Experiment ID for tracing (e.g., `/Users/yourname/experiments`) |
+| `CORE_MLFLOW_ENABLE_TRACING` | ❌ | `false` | Enable MLflow tracing for LLM calls and agent execution |
+
+⚠️ = Required if `CORE_MLFLOW_ENABLE_TRACING=true`
+
+**Setup Instructions:**
+
+**Step 1: Set Databricks URIs** (standard values when using Databricks)
+```bash
+CORE_MLFLOW_TRACKING_URI=databricks
+CORE_MLFLOW_REGISTRY_URI=databricks-uc
+```
+
+**Step 2: Create MLflow Experiment**
+
+1. Open Databricks Console → **Machine Learning** → **Experiments**
+2. Click **Create Experiment**
+3. Enter experiment name (e.g., `agent-will-smith-production`)
+4. Copy the **Experiment ID** from the URL or experiment details
+5. Set as environment variable:
+   ```bash
+   CORE_MLFLOW_EXPERIMENT_ID=/Users/yourname/agent-experiments
+   ```
+
+📚 [MLflow Tracking Guide](https://docs.databricks.com/en/mlflow/tracking.html)
+
+**Step 3: Register Prompts in MLflow**
+
+1. Open Databricks Console → **Machine Learning** → **Prompt Engineering**
+2. Click **Create Prompt**
+3. Write your prompt template using variables (e.g., `{user_query}`, `{context}`, `{examples}`)
+4. Test the prompt with sample inputs
+5. Click **Save** and version the prompt
+6. Copy the prompt path in format: `prompts:/<catalog>.<schema>.<prompt_name>/<version>`
+7. Use this path in agent configuration (see [Agent Configuration](#6-agent-configuration))
+
+Example prompt path:
+```bash
+prompts:/aigc_prod.intent_engine.product_recommendation_prompt/1
+```
+
+📚 [MLflow Prompt Engineering Guide](https://docs.databricks.com/en/mlflow/prompt-engineering.html)
+
+**Step 4: Enable Tracing**
+```bash
+CORE_MLFLOW_ENABLE_TRACING=true
+```
+
+When enabled, every agent invocation logs to MLflow with LLM calls, token usage, prompts, and outputs for debugging and evaluation.
+
+---
+
+### 3. FastAPI Configuration
+
+**Environment Variable Prefix**: `CORE_FASTAPI_*`  
+**Configuration Class**: [`FastAPIConfig`](src/agent_will_smith/core/config/fastapi_config.py)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CORE_FASTAPI_APP_NAME` | ❌ | `agent-will-smith` | Application name displayed in API docs |
+| `CORE_FASTAPI_VERSION` | ✅ | - | Application version (must be semantic version, e.g., `0.1.0`) |
+| `CORE_FASTAPI_ENABLE_DOCS` | ❌ | `false` | Enable `/docs` and `/redoc` endpoints |
+| `CORE_FASTAPI_PORT` | ❌ | `8000` | Server port number |
+| `CORE_FASTAPI_API_KEY` | ✅ | - | Bearer token for API authentication |
+
+**Setup Instructions:**
+
+**Step 1: Set Application Version**
+
+Must be a valid semantic version (validated with `semver` library):
+```bash
+CORE_FASTAPI_VERSION=0.1.0
+```
+
+**Step 2: Generate Secure API Key**
+
+Generate a cryptographically secure API key:
+```bash
+openssl rand -hex 32
+```
+
+Copy the output and set as:
+```bash
+CORE_FASTAPI_API_KEY=your-generated-key-here
+```
+
+**Step 3: Configure Documentation**
+
+```bash
+# Development - Enable interactive API docs
+CORE_FASTAPI_ENABLE_DOCS=true
+
+# Production - Disable for security
+CORE_FASTAPI_ENABLE_DOCS=false
+```
+
+**Using the API:**
+
+All API requests must include the authentication header:
+```bash
+curl -H "Authorization: Bearer your-api-key" http://localhost:8000/api/v1/...
+```
+
+API documentation available at:
+- Swagger UI: `http://localhost:8000/docs` (when `ENABLE_DOCS=true`)
+- ReDoc: `http://localhost:8000/redoc` (when `ENABLE_DOCS=true`)
+
+**Security Note:** The API key is validated by [`auth_middleware.py`](src/agent_will_smith/app/middleware/auth_middleware.py) on every request. Always disable `/docs` in production environments.
+
+---
+
+### 4. Logging Configuration
+
+**Environment Variable Prefix**: `CORE_LOG_*`  
+**Configuration Class**: [`LogConfig`](src/agent_will_smith/core/config/log_config.py)
+
+| Variable | Required | Default | Description | Options |
+|----------|----------|---------|-------------|---------|
+| `CORE_LOG_LEVEL` | ❌ | `info` | Application log level | `debug`, `info`, `warning`, `error`, `fatal` |
+| `CORE_LOG_FORMAT` | ❌ | `json` | Log output format | `json` (production), `pretty` (development) |
+| `CORE_LOG_THIRD_PARTY_LEVEL` | ❌ | `warning` | Minimum log level for 3rd party libraries | `debug`, `info`, `warning`, `error`, `fatal` |
+
+**Recommended Settings by Environment:**
+
+**Development:**
+```bash
+CORE_LOG_LEVEL=debug
+CORE_LOG_FORMAT=pretty           # Colored, human-readable output
+CORE_LOG_THIRD_PARTY_LEVEL=warning
+```
+
+**Production:**
+```bash
+CORE_LOG_LEVEL=info
+CORE_LOG_FORMAT=json             # Structured logs for log aggregation
+CORE_LOG_THIRD_PARTY_LEVEL=warning
+```
+
+**Log Level Guidelines:**
+- `debug`: Verbose logging for troubleshooting (generates large log volumes)
+- `info`: General operational messages (recommended for production)
+- `warning`: Unexpected but handled conditions
+- `error`: Error events that might still allow the application to continue
+- `fatal`: Severe errors causing application termination
+
+**Third-Party Libraries:**
+
+The `CORE_LOG_THIRD_PARTY_LEVEL` setting controls log verbosity for:
+- `mlflow` - MLflow tracking and model operations
+- `databricks` - Databricks SDK operations
+- `langgraph` - LangGraph agent execution
+- `uvicorn` - ASGI server logs
+
+Setting this to `warning` reduces noise while keeping important error messages.
+
+---
+
+### 5. Agent Configuration
+
+**Environment Variable Prefix**: `AGENT_<AGENT_NAME>_*`  
+**Base Class**: [`BaseAgentConfig`](src/agent_will_smith/core/config/base_agent_config.py)
+
+Each agent has **isolated configuration** with its own namespace. Agents inherit common metadata from `BaseAgentConfig` and define their own specific fields based on their functionality.
+
+> **Important**: Each agent defines its own configuration fields. The examples below show the Product Recommendation agent, but your agent may have completely different fields depending on its requirements.
+
+**Common Configuration (All Agents):**
+
+These fields are inherited from [`BaseAgentConfig`](src/agent_will_smith/core/config/base_agent_config.py) and **required for all agents**:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AGENT_<NAME>_AGENT_NAME` | ✅ | - | Agent identifier (e.g., `product_recommendation`, `content_moderation`) |
+| `AGENT_<NAME>_AGENT_VERSION` | ✅ | - | Agent version (semantic version format, e.g., `1.0.0`) |
+| `AGENT_<NAME>_PROMPT_CACHE_TTL` | ✅ | - | Prompt cache TTL in seconds (e.g., `3600`) |
+
+**Agent-Specific Configuration (Varies by Agent):**
+
+Each agent defines additional fields in its own `config.py`. Below are **examples from the Product Recommendation agent** ([`ProductRecommendationConfig`](src/agent_will_smith/agent/product_recommendation/config.py)):
+
+**Example: LLM Configuration**
+
+| Variable | Description |
+|----------|-------------|
+| `AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT` | Databricks serving endpoint name |
+| `AGENT_PRODUCT_RECOMMENDATION_LLM_TEMPERATURE` | Sampling temperature (0.0-2.0) |
+| `AGENT_PRODUCT_RECOMMENDATION_LLM_MAX_TOKENS` | Maximum tokens in LLM response |
+
+**Example: Vector Search Configuration**
+
+| Variable | Description |
+|----------|-------------|
+| `AGENT_PRODUCT_RECOMMENDATION_VECTOR_SEARCH_ENDPOINT` | Databricks vector search endpoint name |
+| `AGENT_PRODUCT_RECOMMENDATION_ACTIVITIES_INDEX` | Vector search index for activities vertical |
+| `AGENT_PRODUCT_RECOMMENDATION_BOOKS_INDEX` | Vector search index for books vertical |
+| `AGENT_PRODUCT_RECOMMENDATION_ARTICLES_INDEX` | Vector search index for articles vertical |
+
+**Example: Agent Behavior**
+
+| Variable | Description |
+|----------|-------------|
+| `AGENT_PRODUCT_RECOMMENDATION_MAX_K_PRODUCTS` | Maximum number of products to return |
+| `AGENT_PRODUCT_RECOMMENDATION_MAX_AGENT_STEPS` | Maximum reasoning steps |
+| `AGENT_PRODUCT_RECOMMENDATION_AGENT_TIMEOUT_SECONDS` | Agent execution timeout |
+
+**Example: Prompt Management**
+
+| Variable | Description |
+|----------|-------------|
+| `AGENT_PRODUCT_RECOMMENDATION_PROMPT_NAME` | MLflow prompt registry path (format: `prompts:/<catalog>.<schema>.<name>/<version>`) |
+
+> **Note**: Your agent might need different fields entirely. For example:
+> - A content moderation agent might have `MODERATION_THRESHOLDS`, `BLOCKED_CATEGORIES`
+> - A summarization agent might only need `LLM_ENDPOINT`, `MAX_SUMMARY_LENGTH`, `PROMPT_NAME`
+> - Define only the fields your agent requires in its `config.py`
+
+**Common Setup Steps (Applicable to Most Agents):**
+
+> **Note**: These are common setup patterns. Your specific agent may require different resources or additional configuration.
+
+**Configuring LLM Endpoints** (if your agent uses LLMs)
+
+**Option A: Use Databricks Foundation Models** (Recommended - No setup required)
+
+Databricks provides pre-deployed Foundation Model endpoints ready to use:
+
+```bash
+# Examples of pre-deployed endpoints
+AGENT_YOUR_AGENT_LLM_ENDPOINT=databricks-meta-llama-3-1-70b-instruct
+AGENT_YOUR_AGENT_LLM_ENDPOINT=databricks-dbrx-instruct
+AGENT_YOUR_AGENT_LLM_ENDPOINT=databricks-mixtral-8x7b-instruct
+```
+
+📚 [Available Foundation Models](https://docs.databricks.com/en/machine-learning/foundation-models/index.html)
+
+**Option B: Create Custom Serving Endpoint** (For fine-tuned models)
+
+1. Databricks Console → **Serving** → **Create serving endpoint**
+2. Deploy your custom fine-tuned model
+3. Copy endpoint name → Set as `AGENT_<NAME>_LLM_ENDPOINT`
+
+📚 [Databricks Model Serving Guide](https://docs.databricks.com/en/machine-learning/model-serving/index.html)
+
+**Creating Vector Search Resources** (if your agent uses vector search)
+
+1. **Create Endpoint**: Databricks Console → Compute → Vector Search → Create endpoint
+2. **Prepare Data**: Delta table with vector embeddings column (array of floats)
+3. **Create Indexes**: Vector Search → Create index → Select endpoint and source table
+4. Set index names as agent-specific variables (e.g., `AGENT_<NAME>_<INDEX_NAME>_INDEX`)
+
+📚 [Databricks Vector Search Guide](https://docs.databricks.com/en/generative-ai/vector-search.html)
+
+**Registering Prompts** (if your agent uses prompts)
+
+1. Databricks Console → Machine Learning → Prompt Engineering → Create Prompt
+2. Register prompt with variables (e.g., `{user_query}`, `{context}`)
+3. Copy path format: `prompts:/<catalog>.<schema>.<prompt_name>/<version>`
+4. Set as agent-specific variable (e.g., `AGENT_<NAME>_PROMPT_NAME`)
+
+📚 [MLflow Prompt Engineering](https://docs.databricks.com/en/mlflow/prompt-engineering.html)
+
+---
+
+**Example: Product Recommendation Agent Configuration**
+
+```bash
+# Common Metadata (Required for all agents)
+AGENT_PRODUCT_RECOMMENDATION_AGENT_NAME=product_recommendation
+AGENT_PRODUCT_RECOMMENDATION_AGENT_VERSION=1.0.0
+AGENT_PRODUCT_RECOMMENDATION_PROMPT_CACHE_TTL=3600
+
+# Agent-Specific Configuration (unique to this agent)
+AGENT_PRODUCT_RECOMMENDATION_LLM_ENDPOINT=databricks-gpt-4o-mini
+AGENT_PRODUCT_RECOMMENDATION_LLM_TEMPERATURE=0.7
+AGENT_PRODUCT_RECOMMENDATION_LLM_MAX_TOKENS=2048
+
+AGENT_PRODUCT_RECOMMENDATION_VECTOR_SEARCH_ENDPOINT=vs-endpoint-production
+AGENT_PRODUCT_RECOMMENDATION_ACTIVITIES_INDEX=main.catalog.activities_index
+AGENT_PRODUCT_RECOMMENDATION_BOOKS_INDEX=main.catalog.books_index
+AGENT_PRODUCT_RECOMMENDATION_ARTICLES_INDEX=main.catalog.articles_index
+
+AGENT_PRODUCT_RECOMMENDATION_MAX_K_PRODUCTS=10
+AGENT_PRODUCT_RECOMMENDATION_PROMPT_NAME=prompts:/aigc_prod.intent_engine.product_recommendation_prompt/1
+```
+
+---
+
+**Adding Your Own Agent:**
+
+1. Create config class in `agent/<your_agent>/config.py`:
+   ```python
+   from src.agent_will_smith.core.config.base_agent_config import BaseAgentConfig
+   from pydantic_settings import SettingsConfigDict
+   
+   class Config(BaseAgentConfig):
+       model_config = SettingsConfigDict(
+           env_prefix="AGENT_YOUR_AGENT_",
+           env_file=".env",
+       )
+       
+       # Define your agent-specific fields here
+       your_custom_field: str
+       another_field: int = 100  # with default
+   ```
+
+2. Add variables to `.env`:
+   ```bash
+   # Common metadata (required)
+   AGENT_YOUR_AGENT_AGENT_NAME=your_agent
+   AGENT_YOUR_AGENT_AGENT_VERSION=1.0.0
+   AGENT_YOUR_AGENT_PROMPT_CACHE_TTL=3600
+   
+   # Your agent-specific fields
+   AGENT_YOUR_AGENT_YOUR_CUSTOM_FIELD=value
+   AGENT_YOUR_AGENT_ANOTHER_FIELD=200
+   ```
+
+3. Configuration is automatically loaded and validated at startup
