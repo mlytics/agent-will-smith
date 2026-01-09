@@ -34,7 +34,7 @@ router = APIRouter()
     - LLM reasoning for selection and ranking
     
     **Architecture:** DI Container pattern following joke_agent architecture.
-    **Authentication:** Requires x-api-key header.
+    **Authentication:** Requires Bearer token in Authorization header.
     """,
     tags=["Recommendations"],
 )

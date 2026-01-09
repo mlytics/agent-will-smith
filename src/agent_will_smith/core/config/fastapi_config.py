@@ -18,7 +18,7 @@ class FastAPIConfig(BaseSettings):
     port: int = Field(default=8000, description="API port")
     api_key: str = Field(
         ...,
-        description="API key for x-api-key header authentication",
+        description="API key for Bearer token authentication",
     )
 
 
