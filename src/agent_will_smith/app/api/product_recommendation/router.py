@@ -17,6 +17,7 @@ from dependency_injector.wiring import inject, Provide
 from agent_will_smith.agent.product_recommendation.container import Container
 from agent_will_smith.agent.product_recommendation.agent import Agent
 from agent_will_smith.agent.product_recommendation.state import AgentInput
+from agent_will_smith.core.exceptions import AgentStateError
 
 router = APIRouter()
 
@@ -91,19 +92,37 @@ async def recommend_products_endpoint(
         vertical_products = agent_output.grouped_results.get(vertical, [])
         error = agent_output.errors.get(vertical)
 
-        # Convert each product dict to ProductRecommendation
-        products = [
-            ProductRecommendation(
-                product_id=p["product_id"],
-                product_type=p["product_type"],
-                title=p["title"],
-                description=p.get("description"),
-                relevance_score=p["relevance_score"],
-                reasoning=agent_output.intent,  # Use intent as reasoning
-                metadata=p.get("metadata", {}),
+        # Convert each product dict to ProductRecommendation with defensive checks
+        try:
+            products = [
+                ProductRecommendation(
+                    product_id=p["product_id"],
+                    product_type=p["product_type"],
+                    title=p["title"],
+                    description=p.get("description"),
+                    relevance_score=p["relevance_score"],
+                    metadata=p.get("metadata", {}),
+                )
+                for p in vertical_products
+            ]
+        except (KeyError, TypeError) as e:
+            # Internal state corruption - should never happen
+            logger.error(
+                "malformed agent output",
+                vertical=vertical,
+                error=str(e),
+                raw_products=vertical_products,
             )
-            for p in vertical_products
-        ]
+            raise AgentStateError(
+                "Agent returned malformed product data",
+                details={
+                    "vertical": vertical,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "raw_products": vertical_products,
+                },
+                conflict=False,  # Programming error
+            ) from e
 
         results_by_vertical.append(
             VerticalResults(

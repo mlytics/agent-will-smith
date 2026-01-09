@@ -58,15 +58,20 @@ Provide a concise intent summary (2-3 sentences max)."""
             ]
         )
 
-        if not response.content:
+        # Strip whitespace and validate
+        intent_text = response.content.strip() if response.content else ""
+
+        if not intent_text or len(intent_text) < 10:
             raise DomainValidationError(
-                "LLM returned empty intent",
+                "LLM returned insufficient intent",
                 details={
-                    "validation": "empty_response",
-                    "expected": "non-empty intent string",
+                    "validation": "intent_too_short",
+                    "expected_min_length": 10,
+                    "actual_length": len(intent_text),
+                    "raw_content": response.content,
                 }
             )
 
-        self.logger.info("intent analysis completed", intent_length=len(response.content))
+        self.logger.info("intent analysis completed", intent_length=len(intent_text))
 
-        return {"intent_node": IntentNodeNamespace(intent=response.content)}
+        return {"intent_node": IntentNodeNamespace(intent=intent_text)}

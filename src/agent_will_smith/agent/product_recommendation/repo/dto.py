@@ -9,46 +9,46 @@ from pydantic import BaseModel, Field
 class ActivityDTO(BaseModel):
     """Activity result from vector search (content_activity_gold_index)."""
     
-    content_id: str
-    title: str
-    description: str | None = None
-    category: str | None = None
-    location_name: str | None = None
-    location_address: str | None = None
-    organizer: str | None = None
-    start_time: str | None = None
-    end_time: str | None = None
-    permalink_url: str | None = None
-    cover_image_urls: list[str] = Field(default_factory=list)
-    score: float = Field(default=0.0)
+    content_id: str = Field(..., description="Unique activity identifier", examples=["act-12345"])
+    title: str = Field(..., description="Activity title", examples=["Sustainable Living Workshop"])
+    description: str | None = Field(None, description="Activity description", examples=["Learn eco-friendly practices"])
+    category: str | None = Field(None, description="Activity category", examples=["environment", "education"])
+    location_name: str | None = Field(None, description="Venue or location name", examples=["Green Community Center"])
+    location_address: str | None = Field(None, description="Full address", examples=["123 Eco St, San Francisco, CA"])
+    organizer: str | None = Field(None, description="Event organizer name", examples=["EcoLife Foundation"])
+    start_time: str | None = Field(None, description="Activity start time (ISO 8601)", examples=["2024-03-15T10:00:00Z"])
+    end_time: str | None = Field(None, description="Activity end time (ISO 8601)", examples=["2024-03-15T12:00:00Z"])
+    permalink_url: str | None = Field(None, description="URL to activity details", examples=["https://example.com/activities/123"])
+    cover_image_urls: list[str] = Field(default_factory=list, description="List of cover image URLs", examples=[["https://example.com/img1.jpg"]])
+    score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.92])
 
 
 class BookDTO(BaseModel):
     """Book result from vector search (content_book_gold_index)."""
     
-    content_id: str
-    title_main: str
-    title_subtitle: str | None = None
-    description: str | None = None
-    authors: list[str] = Field(default_factory=list)
-    categories: list[str] = Field(default_factory=list)
-    permalink_url: str | None = None
-    cover_image_url: str | None = None
-    prices: list[str] = Field(default_factory=list)
-    score: float = Field(default=0.0)
+    content_id: str = Field(..., description="Unique book identifier", examples=["book-67890"])
+    title_main: str = Field(..., description="Main book title", examples=["The Sustainable Home"])
+    title_subtitle: str | None = Field(None, description="Book subtitle", examples=["A Guide to Eco-Friendly Living"])
+    description: str | None = Field(None, description="Book description or summary", examples=["Comprehensive guide to sustainable living..."])
+    authors: list[str] = Field(default_factory=list, description="List of author names", examples=[["Jane Smith", "John Doe"]])
+    categories: list[str] = Field(default_factory=list, description="Book categories/genres", examples=[["Environment", "Lifestyle"]])
+    permalink_url: str | None = Field(None, description="URL to book details", examples=["https://example.com/books/123"])
+    cover_image_url: str | None = Field(None, description="Cover image URL", examples=["https://example.com/covers/book-123.jpg"])
+    prices: list[str] = Field(default_factory=list, description="List of prices (various formats)", examples=[["$19.99", "$9.99 (ebook)"]])
+    score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.88])
 
 
 class ArticleDTO(BaseModel):
     """Article result from vector search (content_article_gold_index)."""
     
-    content_id: str
-    title: str
-    content: str | None = None
-    authors: list[str] = Field(default_factory=list)
-    keywords: list[str] = Field(default_factory=list)
-    categories: list[str] = Field(default_factory=list)
-    permalink_url: str | None = None
-    thumbnail_url: str | None = None
-    main_image_url: str | None = None
-    publish_time: str | None = None
-    score: float = Field(default=0.0)
+    content_id: str = Field(..., description="Unique article identifier", examples=["article-11223"])
+    title: str = Field(..., description="Article title", examples=["10 Ways to Live Sustainably"])
+    content: str | None = Field(None, description="Article full text or excerpt", examples=["Sustainable living starts with small changes..."])
+    authors: list[str] = Field(default_factory=list, description="List of article authors", examples=[["Sarah Green"]])
+    keywords: list[str] = Field(default_factory=list, description="Article keywords/tags", examples=[["sustainability", "eco-friendly", "green-living"]])
+    categories: list[str] = Field(default_factory=list, description="Article categories", examples=[["Environment", "Lifestyle"]])
+    permalink_url: str | None = Field(None, description="URL to article", examples=["https://example.com/articles/123"])
+    thumbnail_url: str | None = Field(None, description="Thumbnail image URL", examples=["https://example.com/thumbs/article-123.jpg"])
+    main_image_url: str | None = Field(None, description="Main article image URL", examples=["https://example.com/images/article-123.jpg"])
+    publish_time: str | None = Field(None, description="Article publish time (ISO 8601)", examples=["2024-01-15T08:00:00Z"])
+    score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.95])

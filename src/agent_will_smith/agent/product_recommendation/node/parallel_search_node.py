@@ -154,23 +154,21 @@ class ParallelSearchNode:
         customer_uuid: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> list[ProductResult]:
-        """Search a single vertical with timeout."""
+        """Search a single vertical with timeout.
+        
+        Now uses the generic repository.search() method.
+        No more method mapping dictionary needed!
+        """
         if timeout is None:
             timeout = self.agent_config.vector_search_timeout_seconds
 
-        search_methods = {
-            "activities": self.product_repo.search_activities,
-            "books": self.product_repo.search_books,
-            "articles": self.product_repo.search_articles,
-        }
-
-        search_method = search_methods[vertical]
-
         self.logger.info("vertical search starting", vertical=vertical, timeout=timeout)
 
+        # Direct call to generic search method - no mapping needed!
         product_results = await asyncio.wait_for(
             asyncio.to_thread(
-                search_method,
+                self.product_repo.search,
+                vertical=vertical,
                 query=query,
                 max_results=k,
                 customer_uuid=customer_uuid,

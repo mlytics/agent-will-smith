@@ -10,6 +10,7 @@ Namespace Architecture:
 - Only converted to dict at API boundary
 """
 
+import asyncio
 from typing import Optional
 import structlog
 import mlflow
@@ -26,6 +27,7 @@ from agent_will_smith.agent.product_recommendation.node.intent_analysis_node imp
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
 from agent_will_smith.agent.product_recommendation.node.output_node import OutputNode
 from agent_will_smith.agent.product_recommendation.config import Config
+from agent_will_smith.core.exceptions import AgentTimeoutError, AgentStateError
 
 
 class Agent:
@@ -109,8 +111,27 @@ class Agent:
         # AgentInput serves dual purpose - no conversion needed!
         initial_state = AgentState(input=input_dto)
 
-        # Run graph (LangGraph validates input/output schemas)
-        output_state_dict = await self.graph.ainvoke(initial_state)
+        # Run graph with timeout enforcement (LangGraph validates input/output schemas)
+        try:
+            output_state_dict = await asyncio.wait_for(
+                self.graph.ainvoke(initial_state),
+                timeout=self.agent_config.agent_timeout_seconds,
+            )
+        except asyncio.TimeoutError as e:
+            self.logger.error(
+                "agent execution timeout",
+                timeout_seconds=self.agent_config.agent_timeout_seconds,
+                article_length=len(input_dto.article),
+                verticals=input_dto.verticals,
+            )
+            raise AgentTimeoutError(
+                "Agent execution exceeded timeout",
+                details={
+                    "timeout_seconds": self.agent_config.agent_timeout_seconds,
+                    "article_length": len(input_dto.article),
+                    "verticals": input_dto.verticals,
+                }
+            ) from e
 
         # LangGraph returns dict with only output field (via output_schema)
         # Convert to AgentOutputState for type safety
@@ -118,7 +139,14 @@ class Agent:
 
         # Validate output was populated
         if output_state.output is None:
-            raise ValueError("output node did not execute")
+            raise AgentStateError(
+                "Output node failed to produce output",
+                details={
+                    "graph_state_keys": list(output_state_dict.keys()),
+                    "expected_field": "output",
+                },
+                conflict=False,  # Programming error, not user-resolvable
+            )
 
         self.logger.info(
             "execution completed",

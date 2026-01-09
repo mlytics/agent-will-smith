@@ -50,6 +50,10 @@ class ObservabilityMiddleware():
 
             if message["type"] == "http.response.start":
                 status_code = message["status"]
+                # Add X-Trace-ID response header
+                headers = list(message.get("headers", []))
+                headers.append((b"x-trace-id", trace_id.encode("utf-8")))
+                message["headers"] = headers
             await send(message)
 
 

@@ -5,6 +5,7 @@ import structlog
 from agent_will_smith.agent.product_recommendation.state import AgentState, AgentOutput
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
 from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.core.exceptions import AgentStateError
 
 
 class OutputNode:
@@ -20,9 +21,25 @@ class OutputNode:
         ProductResult objects to dicts.
         """
         if state.search_node is None:
-            raise ValueError("search_node must be set before output")
+            raise AgentStateError(
+                "Invalid node execution order: search_node missing",
+                details={
+                    "current_node": "output_node",
+                    "missing_dependency": "search_node",
+                    "available_namespaces": [k for k, v in state.model_dump(exclude_none=True).items() if v is not None],
+                },
+                conflict=False,  # Programming error
+            )
         if state.intent_node is None:
-            raise ValueError("intent_node must be set before output")
+            raise AgentStateError(
+                "Invalid node execution order: intent_node missing",
+                details={
+                    "current_node": "output_node",
+                    "missing_dependency": "intent_node",
+                    "available_namespaces": [k for k, v in state.model_dump(exclude_none=True).items() if v is not None],
+                },
+                conflict=False,  # Programming error
+            )
 
         verticals = state.input.verticals
         k = state.input.k

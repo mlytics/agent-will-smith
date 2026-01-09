@@ -16,12 +16,14 @@ class RecommendProductsRequest(BaseModel):
         ...,
         description="Original article text to analyze",
         min_length=10,
+        max_length=50000,
         examples=["This article discusses sustainable living and eco-friendly products..."],
     )
     question: str = Field(
         ...,
         description="Selected question to guide recommendations",
         min_length=5,
+        max_length=500,
         examples=["What products would help someone live more sustainably?"],
     )
     k: int = Field(
@@ -54,9 +56,6 @@ class ProductRecommendation(BaseModel):
     description: str | None = Field(None, description="Product description")
     relevance_score: float = Field(
         ..., description="Relevance score (0.0-1.0)", ge=0.0, le=1.0
-    )
-    reasoning: str = Field(
-        ..., description="Agent's reasoning for why this product was recommended"
     )
     metadata: dict = Field(
         default_factory=dict, description="Additional product-specific metadata"
