@@ -4,7 +4,7 @@ import asyncio
 import structlog
 from typing import Optional, Literal
 
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
 from agent_will_smith.agent.product_recommendation.model.namespaces import SearchNodeNamespace
 from agent_will_smith.agent.product_recommendation.state import AgentState
@@ -56,11 +56,11 @@ class ParallelSearchNode:
 
     def _aggregate_results(
         self,
-        verticals: list[VERTICALS],
+        verticals: list[Vertical],
         results: list[list[ProductResult] | Exception]
-    ) -> tuple[dict[VERTICALS, list[ProductResult]], dict[str, str], Literal["complete", "partial"]]:
+    ) -> tuple[dict[Vertical, list[ProductResult]], dict[str, str], Literal["complete", "partial"]]:
         """Aggregate parallel search results and errors."""
-        vertical_results: dict[VERTICALS, list[ProductResult]] = {}
+        vertical_results: dict[Vertical, list[ProductResult]] = {}
         errors: dict[str, str] = {}
 
         for vertical, result in zip(verticals, results):
@@ -148,7 +148,7 @@ class ParallelSearchNode:
 
     async def _search_vertical(
         self,
-        vertical: VERTICALS,
+        vertical: Vertical,
         query: str,
         k: int,
         customer_uuid: Optional[str] = None,

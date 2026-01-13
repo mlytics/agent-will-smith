@@ -14,7 +14,7 @@ import structlog
 
 from agent_will_smith.infra.vector_search_client import VectorSearchClient
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product_registry import ProductRegistry
 from agent_will_smith.core.exceptions import UpstreamError
 
@@ -48,7 +48,7 @@ class ProductVectorRepository:
 
     def search(
         self,
-        vertical: VERTICALS,
+        vertical: Vertical,
         query: str,
         max_results: int,
         customer_uuid: str | None = None,
@@ -89,7 +89,7 @@ class ProductVectorRepository:
     def _parse_results(
         self,
         results: dict,
-        vertical: VERTICALS,
+        vertical: Vertical,
         columns: list[str],
     ) -> list[ProductResult]:
         """Parse raw results into ProductResult objects.
@@ -152,7 +152,7 @@ class ProductVectorRepository:
         return products
 
     def _parse_result_row(
-        self, result_dict: dict, vertical: VERTICALS
+        self, result_dict: dict, vertical: Vertical
     ) -> ProductResult:
         """Parse a single result row into ProductResult using registry.
         

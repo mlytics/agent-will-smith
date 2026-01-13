@@ -7,7 +7,7 @@ All configuration is built at runtime inside the class, not at import time.
 from typing import TYPE_CHECKING
 
 from agent_will_smith.agent.product_recommendation.repo.dto import ActivityDTO, BookDTO, ArticleDTO
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 if TYPE_CHECKING:
     from agent_will_smith.agent.product_recommendation.config import Config
@@ -35,8 +35,8 @@ class ProductRegistry:
         
         # Product configuration (built at init, not import)
         # All product-related config in one place - no separate mappings
-        self._products: dict[VERTICALS, dict] = {
-            "activities": {
+        self._products: dict[Vertical, dict] = {
+            Vertical.ACTIVITIES: {
                 "dto": ActivityDTO,
                 "id_field": "content_id",
                 "title_field": "title",
@@ -51,7 +51,7 @@ class ProductRegistry:
                     "start_time", "end_time", "permalink_url", "cover_image_urls",
                 ],
             },
-            "books": {
+            Vertical.BOOKS: {
                 "dto": BookDTO,
                 "id_field": "content_id",
                 "title_field": "title_main",
@@ -65,7 +65,7 @@ class ProductRegistry:
                     "permalink_url", "cover_image_url", "prices",
                 ],
             },
-            "articles": {
+            Vertical.ARTICLES: {
                 "dto": ArticleDTO,
                 "id_field": "content_id",
                 "title_field": "title",
@@ -96,14 +96,14 @@ class ProductRegistry:
                 f"Set AGENT_PRODUCT_RECOMMENDATION_PRODUCT_INDICES environment variable."
             )
 
-    def get_config(self, vertical: VERTICALS) -> dict:
+    def get_config(self, vertical: Vertical) -> dict:
         """Get product configuration for a vertical."""
         return self._products[vertical]
 
-    def get_index_name(self, vertical: VERTICALS) -> str:
+    def get_index_name(self, vertical: Vertical) -> str:
         """Get vector search index name for a vertical."""
         return self._config.product_indices[vertical]
 
-    def get_columns(self, vertical: VERTICALS) -> list[str]:
+    def get_columns(self, vertical: Vertical) -> list[str]:
         """Get columns to fetch for a vertical."""
         return self._products[vertical]["columns"]

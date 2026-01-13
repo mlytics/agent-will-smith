@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 
 class RecommendProductsRequest(BaseModel):
@@ -35,7 +35,7 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[VERTICALS] | None = Field(
+    product_types: list[Vertical] | None = Field(
         default=None,
         description="Filter by product types. If None, search all verticals.",
         examples=[["activities", "books", "articles"]],
@@ -51,7 +51,7 @@ class ProductRecommendation(BaseModel):
     """Individual product recommendation with metadata."""
 
     product_id: str = Field(..., description="Unique product identifier")
-    vertical: VERTICALS = Field(
+    vertical: Vertical = Field(
         ..., description="Product vertical (activities, books, or articles)"
     )
     title: str = Field(..., description="Product title")

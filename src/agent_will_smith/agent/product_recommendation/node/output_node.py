@@ -4,7 +4,7 @@ import structlog
 
 from agent_will_smith.agent.product_recommendation.state import AgentState, AgentOutput
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.core.exceptions import AgentStateError
 
 
@@ -47,7 +47,7 @@ class OutputNode:
 
         self.logger.info("composing output DTO", verticals=verticals, k=k)
 
-        grouped_results_pydantic: dict[VERTICALS, list[ProductResult]] = {}
+        grouped_results_pydantic: dict[Vertical, list[ProductResult]] = {}
 
         for vertical in verticals:
             products = search_results.get(vertical, [])

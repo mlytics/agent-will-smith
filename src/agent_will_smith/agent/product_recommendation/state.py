@@ -5,7 +5,7 @@ Contains AgentInput, AgentOutput, and AgentState for workflow orchestration.
 
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.namespaces import (
     IntentNodeNamespace,
     SearchNodeNamespace,
@@ -33,7 +33,7 @@ class AgentInput(BaseModel):
         description="Number of products to return per vertical",
         examples=[5],
     )
-    verticals: list[VERTICALS] = Field(
+    verticals: list[Vertical] = Field(
         ...,
         description="Product verticals to search (activities, books, articles)",
         min_length=1,

@@ -3,7 +3,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 
 class ProductResult(BaseModel):
@@ -19,7 +19,7 @@ class ProductResult(BaseModel):
         max_length=100,
         examples=["act-123", "book-456", "article-789"],
     )
-    vertical: VERTICALS = Field(
+    vertical: Vertical = Field(
         ...,
         description="Product vertical (activities, books, or articles)",
         examples=["activities"],

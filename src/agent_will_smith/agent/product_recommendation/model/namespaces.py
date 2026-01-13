@@ -2,7 +2,7 @@
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
 
 
@@ -19,7 +19,7 @@ class IntentNodeNamespace(BaseModel):
 
 class SearchNodeNamespace(BaseModel):
     """State namespace for parallel search node."""
-    results: dict[VERTICALS, list[ProductResult]] = Field(
+    results: dict[Vertical, list[ProductResult]] = Field(
         default_factory=dict,
         description="Search results grouped by vertical (activities, books, articles)",
     )
