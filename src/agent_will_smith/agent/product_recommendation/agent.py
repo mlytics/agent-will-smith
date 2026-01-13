@@ -11,7 +11,7 @@ Namespace Architecture:
 """
 
 import asyncio
-from typing import Optional
+
 import structlog
 import mlflow
 from langgraph.graph import StateGraph, START, END

@@ -5,7 +5,9 @@ All API boundaries use Pydantic models for validation and documentation.
 """
 
 from typing import Literal
+
 from pydantic import BaseModel, Field
+
 from agent_will_smith.agent.product_recommendation.model.types import VERTICALS
 
 
@@ -28,7 +30,7 @@ class RecommendProductsRequest(BaseModel):
     )
     k: int = Field(
         ...,
-        description="Number of products to recommend per vertical (1-10)",
+        description="Number of products to recommend per vertical",
         ge=1,
         le=10,
         examples=[5],
@@ -49,8 +51,8 @@ class ProductRecommendation(BaseModel):
     """Individual product recommendation with metadata."""
 
     product_id: str = Field(..., description="Unique product identifier")
-    product_type: Literal["activity", "book", "article"] = Field(
-        ..., description="Type of product (activity, book, or article)"
+    vertical: VERTICALS = Field(
+        ..., description="Product vertical (activities, books, or articles)"
     )
     title: str = Field(..., description="Product title")
     description: str | None = Field(None, description="Product description")

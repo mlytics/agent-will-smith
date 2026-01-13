@@ -30,9 +30,7 @@ class AgentInput(BaseModel):
     )
     k: int = Field(
         ...,
-        description="Number of products to return per vertical (1-10)",
-        ge=1,
-        le=10,
+        description="Number of products to return per vertical",
         examples=[5],
     )
     verticals: list[VERTICALS] = Field(

@@ -8,6 +8,7 @@ from dependency_injector import containers, providers
 from agent_will_smith.core.container import Container as CoreContainer
 from agent_will_smith.infra.container import Container as InfraContainer
 from agent_will_smith.agent.product_recommendation.config import Config
+from agent_will_smith.agent.product_recommendation.model.product_registry import ProductRegistry
 from agent_will_smith.agent.product_recommendation.repo.product_vector_repository import ProductVectorRepository
 from agent_will_smith.agent.product_recommendation.node.intent_analysis_node import IntentAnalysisNode
 from agent_will_smith.agent.product_recommendation.node.parallel_search_node import ParallelSearchNode
@@ -20,9 +21,10 @@ class Container(containers.DeclarativeContainer):
 
     Follows the joke_agent pattern with layered dependencies:
     1. Infrastructure (shared clients from InfraContainer)
-    2. Repository (product-specific logic)
-    3. Nodes (IntentAnalysisNode, ParallelSearchNode, OutputNode)
-    4. Agent (Agent)
+    2. Registry (product configuration)
+    3. Repository (product-specific logic)
+    4. Nodes (IntentAnalysisNode, ParallelSearchNode, OutputNode)
+    5. Agent (Agent)
     """
 
     # Reference containers
@@ -32,6 +34,12 @@ class Container(containers.DeclarativeContainer):
     # Agent Configuration
     agent_config: providers.Provider[Config] = providers.Singleton(
         Config
+    )
+
+    # Product Registry - validates config on construction
+    product_registry: providers.Provider[ProductRegistry] = providers.Singleton(
+        ProductRegistry,
+        config=agent_config,
     )
 
     # Infrastructure layer - instantiate shared clients with agent config
@@ -56,7 +64,7 @@ class Container(containers.DeclarativeContainer):
     product_vector_repo: providers.Provider[ProductVectorRepository] = providers.Singleton(
         ProductVectorRepository,
         vector_client=vector_search_client,
-        config=agent_config,
+        registry=product_registry,
     )
 
     # Node layer - Intent analysis

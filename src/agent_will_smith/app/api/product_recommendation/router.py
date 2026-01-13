@@ -97,7 +97,7 @@ async def recommend_products_endpoint(
             products = [
                 ProductRecommendation(
                     product_id=p["product_id"],
-                    product_type=p["product_type"],
+                    vertical=p["vertical"],
                     title=p["title"],
                     description=p.get("description"),
                     relevance_score=p["relevance_score"],

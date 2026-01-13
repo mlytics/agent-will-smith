@@ -42,7 +42,7 @@ class Config(BaseAgentConfig):
         examples=[4000],
     )
 
-    # Vector Search
+    # Vector Search - unified indices configuration
     vector_search_endpoint: str = Field(
         ...,
         description="Databricks vector search endpoint name",
@@ -50,26 +50,14 @@ class Config(BaseAgentConfig):
         max_length=200,
         examples=["vector-search-endpoint"],
     )
-    activities_index: str = Field(
+    product_indices: dict[str, str] = Field(
         ...,
-        description="Databricks vector search index for activities",
-        min_length=1,
-        max_length=500,
-        examples=["catalog.schema.content_activity_gold_index"],
-    )
-    books_index: str = Field(
-        ...,
-        description="Databricks vector search index for books",
-        min_length=1,
-        max_length=500,
-        examples=["catalog.schema.content_book_gold_index"],
-    )
-    articles_index: str = Field(
-        ...,
-        description="Databricks vector search index for articles",
-        min_length=1,
-        max_length=500,
-        examples=["catalog.schema.content_article_gold_index"],
+        description="Mapping of product verticals to vector search index names",
+        examples=[{
+            "activities": "catalog.schema.content_activity_gold_index",
+            "books": "catalog.schema.content_book_gold_index",
+            "articles": "catalog.schema.content_article_gold_index",
+        }],
     )
 
     # Timeout Configuration
@@ -81,8 +69,6 @@ class Config(BaseAgentConfig):
     )
 
     # Agent Behavior
-    max_k_products: int = Field(default=10, description="Maximum number of products to return")
-    max_agent_steps: int = Field(default=10, description="Maximum agent reasoning steps")
     agent_timeout_seconds: int = Field(default=60, description="Agent execution timeout in seconds")
 
     # Prompt Management

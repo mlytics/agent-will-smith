@@ -92,15 +92,15 @@ def create_app() -> FastAPI:
     _core_container.wire(modules=["agent_will_smith.app.api.system.router"])
 
     from agent_will_smith.agent.product_recommendation.container import Container
-    from agent_will_smith.agent.product_recommendation.model.product_registry import validate_config_completeness
 
     # Instantiate agent container with core and infra dependencies
     # Note: We keep this reference alive implicitly as it's wired
+    # ProductRegistry validates config completeness on construction (fail fast)
     container = Container(core_container=_core_container, infra_container=_infra_container)
     
-    # Validate product registry configuration completeness at startup (fail fast)
-    validate_config_completeness(container.agent_config())
-    logger.info("product registry configuration validated")
+    # Eagerly initialize product registry to fail fast on config errors
+    container.product_registry()
+    logger.info("product registry initialized and validated")
     
     container.wire(modules=["agent_will_smith.app.api.product_recommendation.router"])
 
