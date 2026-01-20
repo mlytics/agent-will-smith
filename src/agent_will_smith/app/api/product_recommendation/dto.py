@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
+from agent_will_smith.agent.product_recommendation.model.product import ProductMetadata
 
 
 class RecommendProductsRequest(BaseModel):
@@ -49,7 +50,7 @@ class RecommendProductsRequest(BaseModel):
 
 
 class ProductRecommendation(BaseModel):
-    """Individual product recommendation with metadata."""
+    """Individual product recommendation with typed metadata."""
 
     product_id: str = Field(..., description="Unique product identifier")
     vertical: Vertical = Field(
@@ -60,8 +61,8 @@ class ProductRecommendation(BaseModel):
     relevance_score: float = Field(
         ..., description="Relevance score (0.0-1.0)", ge=0.0, le=1.0
     )
-    metadata: dict = Field(
-        default_factory=dict, description="Additional product-specific metadata"
+    metadata: ProductMetadata = Field(
+        ..., description="Product-specific metadata (typed per vertical)"
     )
 
 

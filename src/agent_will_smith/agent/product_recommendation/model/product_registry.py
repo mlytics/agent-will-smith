@@ -33,8 +33,8 @@ class ProductRegistry:
         """
         self._config = config
         
-        # Product configuration - just map verticals to DTOs
-        # All field mappings derived from DTO methods (DRY principle)
+        # Product configuration - map verticals to DTOs
+        # DTOs own their own transformation to ProductResult (explicit, type-safe)
         self._products: dict[Vertical, type[ActivityDTO | BookDTO | ArticleDTO]] = {
             Vertical.ACTIVITIES: ActivityDTO,
             Vertical.BOOKS: BookDTO,
@@ -64,20 +64,6 @@ class ProductRegistry:
     def get_dto_class(self, vertical: Vertical) -> type[ActivityDTO | BookDTO | ArticleDTO]:
         """Get DTO class for a vertical."""
         return self._products[vertical]
-
-    def get_config(self, vertical: Vertical) -> dict:
-        """Get product configuration for a vertical (for backward compatibility).
-        
-        Returns dict with dto class and field names derived from DTO methods.
-        """
-        dto_class = self._products[vertical]
-        return {
-            "dto": dto_class,
-            "id_field": dto_class.get_id_field(),
-            "title_field": dto_class.get_title_field(),
-            "description_field": dto_class.get_description_field(),
-            "metadata_fields": dto_class.get_metadata_fields(),
-        }
 
     def get_index_name(self, vertical: Vertical) -> str:
         """Get vector search index name for a vertical."""

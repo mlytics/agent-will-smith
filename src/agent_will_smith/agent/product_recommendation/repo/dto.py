@@ -1,10 +1,12 @@
 """Database DTOs from Databricks vector search.
 
 Raw structures returned from external data sources.
-DTOs define their own field mappings to eliminate duplication in registry.
+Each DTO knows how to transform itself to ProductResult (explicit, type-safe).
 """
 
 from pydantic import BaseModel, Field
+
+from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 
 class ActivityDTO(BaseModel):
@@ -23,26 +25,33 @@ class ActivityDTO(BaseModel):
     cover_image_urls: list[str] = Field(default_factory=list, description="List of cover image URLs", examples=[["https://example.com/img1.jpg"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.92])
     
-    @classmethod
-    def get_id_field(cls) -> str:
-        """Field name for product ID."""
-        return "content_id"
-    
-    @classmethod
-    def get_title_field(cls) -> str:
-        """Field name for product title."""
-        return "title"
-    
-    @classmethod
-    def get_description_field(cls) -> str:
-        """Field name for product description."""
-        return "description"
-    
-    @classmethod
-    def get_metadata_fields(cls) -> list[str]:
-        """Fields to include in metadata (all except core fields and score)."""
-        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
-        return [field for field in cls.model_fields if field not in core_fields]
+    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+        """Transform DTO to domain ProductResult.
+        
+        Explicit field mapping with typed metadata - DTO owns its transformation.
+        """
+        from agent_will_smith.agent.product_recommendation.model.product import (
+            ProductResult,
+            ActivityMetadata,
+        )
+        
+        return ProductResult(
+            product_id=self.content_id,
+            vertical=vertical,
+            title=self.title,
+            description=self.description,
+            relevance_score=self.score,
+            metadata=ActivityMetadata(
+                category=self.category,
+                organizer=self.organizer,
+                location_name=self.location_name,
+                location_address=self.location_address,
+                start_time=self.start_time,
+                end_time=self.end_time,
+                permalink_url=self.permalink_url,
+                cover_image_urls=self.cover_image_urls,
+            ),
+        )
 
 
 class BookDTO(BaseModel):
@@ -59,26 +68,32 @@ class BookDTO(BaseModel):
     prices: list[str] = Field(default_factory=list, description="List of prices (various formats)", examples=[["$19.99", "$9.99 (ebook)"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.88])
     
-    @classmethod
-    def get_id_field(cls) -> str:
-        """Field name for product ID."""
-        return "content_id"
-    
-    @classmethod
-    def get_title_field(cls) -> str:
-        """Field name for product title."""
-        return "title_main"
-    
-    @classmethod
-    def get_description_field(cls) -> str:
-        """Field name for product description."""
-        return "description"
-    
-    @classmethod
-    def get_metadata_fields(cls) -> list[str]:
-        """Fields to include in metadata (all except core fields and score)."""
-        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
-        return [field for field in cls.model_fields if field not in core_fields]
+    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+        """Transform DTO to domain ProductResult.
+        
+        Explicit field mapping with typed metadata - DTO owns its transformation.
+        Note: title_main maps to title (product-specific naming).
+        """
+        from agent_will_smith.agent.product_recommendation.model.product import (
+            ProductResult,
+            BookMetadata,
+        )
+        
+        return ProductResult(
+            product_id=self.content_id,
+            vertical=vertical,
+            title=self.title_main,  # Explicit: title_main → title
+            description=self.description,
+            relevance_score=self.score,
+            metadata=BookMetadata(
+                title_subtitle=self.title_subtitle,
+                authors=self.authors,
+                categories=self.categories,
+                permalink_url=self.permalink_url,
+                cover_image_url=self.cover_image_url,
+                prices=self.prices,
+            ),
+        )
 
 
 class ArticleDTO(BaseModel):
@@ -96,23 +111,30 @@ class ArticleDTO(BaseModel):
     publish_time: str | None = Field(None, description="Article publish time (ISO 8601)", examples=["2024-01-15T08:00:00Z"])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.95])
     
-    @classmethod
-    def get_id_field(cls) -> str:
-        """Field name for product ID."""
-        return "content_id"
-    
-    @classmethod
-    def get_title_field(cls) -> str:
-        """Field name for product title."""
-        return "title"
-    
-    @classmethod
-    def get_description_field(cls) -> str:
-        """Field name for product description."""
-        return "content"
-    
-    @classmethod
-    def get_metadata_fields(cls) -> list[str]:
-        """Fields to include in metadata (all except core fields and score)."""
-        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
-        return [field for field in cls.model_fields if field not in core_fields]
+    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+        """Transform DTO to domain ProductResult.
+        
+        Explicit field mapping with typed metadata - DTO owns its transformation.
+        Note: content maps to description (product-specific naming).
+        """
+        from agent_will_smith.agent.product_recommendation.model.product import (
+            ProductResult,
+            ArticleMetadata,
+        )
+        
+        return ProductResult(
+            product_id=self.content_id,
+            vertical=vertical,
+            title=self.title,
+            description=self.content,  # Explicit: content → description
+            relevance_score=self.score,
+            metadata=ArticleMetadata(
+                authors=self.authors,
+                keywords=self.keywords,
+                categories=self.categories,
+                permalink_url=self.permalink_url,
+                thumbnail_url=self.thumbnail_url,
+                main_image_url=self.main_image_url,
+                publish_time=self.publish_time,
+            ),
+        )

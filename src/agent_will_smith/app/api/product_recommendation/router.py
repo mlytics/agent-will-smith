@@ -101,7 +101,7 @@ async def recommend_products_endpoint(
                     title=p["title"],
                     description=p.get("description"),
                     relevance_score=p["relevance_score"],
-                    metadata=p.get("metadata", {}),
+                    metadata=p["metadata"],  # Typed metadata (required)
                 )
                 for p in vertical_products
             ]

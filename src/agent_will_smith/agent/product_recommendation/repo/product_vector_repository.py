@@ -154,10 +154,9 @@ class ProductVectorRepository:
     def _parse_result_row(
         self, result_dict: dict, vertical: Vertical
     ) -> ProductResult:
-        """Parse a single result row into ProductResult using registry.
+        """Parse a single result row into ProductResult.
         
-        Generic implementation that works for all product types.
-        Uses registry config to drive DTO validation and field mapping.
+        DTO owns its own transformation - explicit field mapping, type-safe.
         
         Args:
             result_dict: Raw result dict from vector search
@@ -169,8 +168,7 @@ class ProductVectorRepository:
         Raises:
             UpstreamError: If data validation fails
         """
-        config = self.registry.get_config(vertical)
-        dto_class = config["dto"]
+        dto_class = self.registry.get_dto_class(vertical)
         
         # Validate using product-specific DTO
         try:
@@ -188,19 +186,5 @@ class ProductVectorRepository:
                 }
             ) from e
         
-        # Build metadata dict using registry config
-        metadata = {}
-        for field_name in config["metadata_fields"]:
-            value = getattr(dto, field_name, None)
-            if value is not None:
-                metadata[field_name] = value
-        
-        # Map DTO fields to ProductResult using registry
-        return ProductResult(
-            product_id=getattr(dto, config["id_field"]),
-            vertical=vertical,
-            title=getattr(dto, config["title_field"]),
-            description=getattr(dto, config["description_field"], None),
-            relevance_score=getattr(dto, "score", 0.0),
-            metadata=metadata,
-        )
+        # DTO transforms itself - explicit, type-safe
+        return dto.to_product_result(vertical)

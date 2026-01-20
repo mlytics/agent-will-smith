@@ -454,6 +454,16 @@ class ContentModerationConfig(BaseAgentConfig):
 3. Node writes only to its namespace, reads from any
 4. Review focuses only on your namespace — no need to understand full state machine
 
+**Adding a new product vertical:**
+1. Add vertical to `Vertical` enum in `model/types.py`
+2. Create `ProductDTO` in `repo/dto.py` with `to_product_result()` method
+3. Create `ProductMetadata` in `model/product.py` and add to union type
+4. Add to registry mappings in `product_registry.py`
+5. Add index config field in `config.py` (e.g., `podcasts_index: str`)
+6. Add index value to `.env`: `AGENT_PRODUCT_RECOMMENDATION_PODCASTS_INDEX=...`
+7. **Total scope: ~40 lines across 6 files** - no changes to workflow, nodes, or API
+8. **Pro tip:** The typed metadata classes enforce explicit field definitions - this is intentional friction to ensure proper product modeling
+
 ## Project Structure
 
 ```
