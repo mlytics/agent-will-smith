@@ -42,7 +42,7 @@ class Config(BaseAgentConfig):
         examples=[4000],
     )
 
-    # Vector Search - unified indices configuration
+    # Vector Search Configuration
     vector_search_endpoint: str = Field(
         ...,
         description="Databricks vector search endpoint name",
@@ -50,14 +50,23 @@ class Config(BaseAgentConfig):
         max_length=200,
         examples=["vector-search-endpoint"],
     )
-    product_indices: dict[str, str] = Field(
+    activities_index: str = Field(
         ...,
-        description="Mapping of product verticals to vector search index names",
-        examples=[{
-            "activities": "catalog.schema.content_activity_gold_index",
-            "books": "catalog.schema.content_book_gold_index",
-            "articles": "catalog.schema.content_article_gold_index",
-        }],
+        description="Vector search index for activities vertical",
+        min_length=1,
+        examples=["aigc_prod.intent_engine.content_activity_gold_index"],
+    )
+    books_index: str = Field(
+        ...,
+        description="Vector search index for books vertical",
+        min_length=1,
+        examples=["aigc_prod.intent_engine.content_book_gold_index"],
+    )
+    articles_index: str = Field(
+        ...,
+        description="Vector search index for articles vertical",
+        min_length=1,
+        examples=["aigc_prod.intent_engine.content_article_gold_index"],
     )
 
     # Timeout Configuration

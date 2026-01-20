@@ -1,6 +1,7 @@
 """Database DTOs from Databricks vector search.
 
 Raw structures returned from external data sources.
+DTOs define their own field mappings to eliminate duplication in registry.
 """
 
 from pydantic import BaseModel, Field
@@ -21,6 +22,27 @@ class ActivityDTO(BaseModel):
     permalink_url: str | None = Field(None, description="URL to activity details", examples=["https://example.com/activities/123"])
     cover_image_urls: list[str] = Field(default_factory=list, description="List of cover image URLs", examples=[["https://example.com/img1.jpg"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.92])
+    
+    @classmethod
+    def get_id_field(cls) -> str:
+        """Field name for product ID."""
+        return "content_id"
+    
+    @classmethod
+    def get_title_field(cls) -> str:
+        """Field name for product title."""
+        return "title"
+    
+    @classmethod
+    def get_description_field(cls) -> str:
+        """Field name for product description."""
+        return "description"
+    
+    @classmethod
+    def get_metadata_fields(cls) -> list[str]:
+        """Fields to include in metadata (all except core fields and score)."""
+        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
+        return [field for field in cls.model_fields if field not in core_fields]
 
 
 class BookDTO(BaseModel):
@@ -36,6 +58,27 @@ class BookDTO(BaseModel):
     cover_image_url: str | None = Field(None, description="Cover image URL", examples=["https://example.com/covers/book-123.jpg"])
     prices: list[str] = Field(default_factory=list, description="List of prices (various formats)", examples=[["$19.99", "$9.99 (ebook)"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.88])
+    
+    @classmethod
+    def get_id_field(cls) -> str:
+        """Field name for product ID."""
+        return "content_id"
+    
+    @classmethod
+    def get_title_field(cls) -> str:
+        """Field name for product title."""
+        return "title_main"
+    
+    @classmethod
+    def get_description_field(cls) -> str:
+        """Field name for product description."""
+        return "description"
+    
+    @classmethod
+    def get_metadata_fields(cls) -> list[str]:
+        """Fields to include in metadata (all except core fields and score)."""
+        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
+        return [field for field in cls.model_fields if field not in core_fields]
 
 
 class ArticleDTO(BaseModel):
@@ -52,3 +95,24 @@ class ArticleDTO(BaseModel):
     main_image_url: str | None = Field(None, description="Main article image URL", examples=["https://example.com/images/article-123.jpg"])
     publish_time: str | None = Field(None, description="Article publish time (ISO 8601)", examples=["2024-01-15T08:00:00Z"])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.95])
+    
+    @classmethod
+    def get_id_field(cls) -> str:
+        """Field name for product ID."""
+        return "content_id"
+    
+    @classmethod
+    def get_title_field(cls) -> str:
+        """Field name for product title."""
+        return "title"
+    
+    @classmethod
+    def get_description_field(cls) -> str:
+        """Field name for product description."""
+        return "content"
+    
+    @classmethod
+    def get_metadata_fields(cls) -> list[str]:
+        """Fields to include in metadata (all except core fields and score)."""
+        core_fields = {cls.get_id_field(), cls.get_title_field(), cls.get_description_field(), "score"}
+        return [field for field in cls.model_fields if field not in core_fields]

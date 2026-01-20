@@ -76,7 +76,7 @@ async def recommend_products_endpoint(
         article=body.article,
         question=body.question,
         k=body.k,
-        verticals=body.product_types or ["activities", "books", "articles"],
+        verticals=body.product_types,
         customer_uuid=body.customer_uuid,
     )
 
@@ -85,7 +85,7 @@ async def recommend_products_endpoint(
     agent_output = await agent.invoke(input_dto)
 
     # Transform grouped results to API response format
-    verticals_searched = body.product_types or ["activities", "books", "articles"]
+    verticals_searched = body.product_types
 
     results_by_vertical = []
     for vertical in verticals_searched:

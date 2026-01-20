@@ -29,81 +29,64 @@ class ProductRegistry:
         """Initialize registry with all product configuration.
         
         Args:
-            config: Agent configuration with product_indices mapping.
+            config: Agent configuration with individual index settings.
         """
         self._config = config
         
-        # Product configuration (built at init, not import)
-        # All product-related config in one place - no separate mappings
-        self._products: dict[Vertical, dict] = {
-            Vertical.ACTIVITIES: {
-                "dto": ActivityDTO,
-                "id_field": "content_id",
-                "title_field": "title",
-                "description_field": "description",
-                "columns": [
-                    "content_id", "title", "description", "category",
-                    "location_name", "location_address", "organizer",
-                    "start_time", "end_time", "permalink_url", "cover_image_urls",
-                ],
-                "metadata_fields": [
-                    "category", "location_name", "location_address", "organizer",
-                    "start_time", "end_time", "permalink_url", "cover_image_urls",
-                ],
-            },
-            Vertical.BOOKS: {
-                "dto": BookDTO,
-                "id_field": "content_id",
-                "title_field": "title_main",
-                "description_field": "description",
-                "columns": [
-                    "content_id", "title_main", "title_subtitle", "description",
-                    "authors", "categories", "permalink_url", "cover_image_url", "prices",
-                ],
-                "metadata_fields": [
-                    "title_subtitle", "authors", "categories",
-                    "permalink_url", "cover_image_url", "prices",
-                ],
-            },
-            Vertical.ARTICLES: {
-                "dto": ArticleDTO,
-                "id_field": "content_id",
-                "title_field": "title",
-                "description_field": "content",
-                "columns": [
-                    "content_id", "title", "content", "authors", "keywords",
-                    "categories", "permalink_url", "thumbnail_url", "main_image_url", "publish_time",
-                ],
-                "metadata_fields": [
-                    "authors", "keywords", "categories",
-                    "permalink_url", "thumbnail_url", "main_image_url", "publish_time",
-                ],
-            },
+        # Product configuration - just map verticals to DTOs
+        # All field mappings derived from DTO methods (DRY principle)
+        self._products: dict[Vertical, type[ActivityDTO | BookDTO | ArticleDTO]] = {
+            Vertical.ACTIVITIES: ActivityDTO,
+            Vertical.BOOKS: BookDTO,
+            Vertical.ARTICLES: ArticleDTO,
         }
         
-        self._validate_completeness()
+        # Map verticals to index names from individual config fields
+        self._index_map: dict[Vertical, str] = {
+            Vertical.ACTIVITIES: config.activities_index,
+            Vertical.BOOKS: config.books_index,
+            Vertical.ARTICLES: config.articles_index,
+        }
 
     def _validate_completeness(self) -> None:
         """Validate all product types have configured indices."""
         missing = []
         for vertical in self._products:
-            if vertical not in self._config.product_indices:
-                missing.append(vertical)
+            if vertical not in self._index_map or not self._index_map[vertical]:
+                missing.append(vertical.value)
         
         if missing:
             raise ValueError(
                 f"Missing product index configuration for: {', '.join(missing)}. "
-                f"Set AGENT_PRODUCT_RECOMMENDATION_PRODUCT_INDICES environment variable."
+                f"Set AGENT_PRODUCT_RECOMMENDATION_<VERTICAL>_INDEX environment variables."
             )
 
-    def get_config(self, vertical: Vertical) -> dict:
-        """Get product configuration for a vertical."""
+    def get_dto_class(self, vertical: Vertical) -> type[ActivityDTO | BookDTO | ArticleDTO]:
+        """Get DTO class for a vertical."""
         return self._products[vertical]
+
+    def get_config(self, vertical: Vertical) -> dict:
+        """Get product configuration for a vertical (for backward compatibility).
+        
+        Returns dict with dto class and field names derived from DTO methods.
+        """
+        dto_class = self._products[vertical]
+        return {
+            "dto": dto_class,
+            "id_field": dto_class.get_id_field(),
+            "title_field": dto_class.get_title_field(),
+            "description_field": dto_class.get_description_field(),
+            "metadata_fields": dto_class.get_metadata_fields(),
+        }
 
     def get_index_name(self, vertical: Vertical) -> str:
         """Get vector search index name for a vertical."""
-        return self._config.product_indices[vertical]
+        return self._index_map[vertical]
 
     def get_columns(self, vertical: Vertical) -> list[str]:
-        """Get columns to fetch for a vertical."""
-        return self._products[vertical]["columns"]
+        """Get columns to fetch for a vertical.
+        
+        Derived from DTO: all model fields (metadata + id + title + description + score).
+        """
+        dto_class = self._products[vertical]
+        return list(dto_class.model_fields.keys())

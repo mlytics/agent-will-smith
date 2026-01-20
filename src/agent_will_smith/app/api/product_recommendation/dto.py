@@ -35,10 +35,11 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[Vertical] | None = Field(
-        default=None,
-        description="Filter by product types. If None, search all verticals.",
-        examples=[["activities", "books", "articles"]],
+    product_types: list[Vertical] = Field(
+        ...,
+        description="Product types to search (e.g., ['activities'], ['books'], or multiple)",
+        examples=[["activities"], ["activities", "books"]],
+        min_length=1,
     )
     customer_uuid: str = Field(
         ...,
