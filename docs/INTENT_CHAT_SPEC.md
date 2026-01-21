@@ -30,12 +30,12 @@
 ### 1.2 核心設計原則
 
 - **Reuse 現有 product_recommendation** — 不修改 `agent-will-smith` 中 article 相關邏輯
-- - **Chat Agent 作為 Orchestrator** — 新增 Chat Agent 負責對話、意圖捕捉，並將 `product_recommendation` 當作 Tool 調用
-- - **Intent 漸進式收集** — 透過對話累積 Intent Profile，時機成熟才觸發產品推薦
+- **Chat Agent 作為 Orchestrator** — 新增 Chat Agent 負責對話、意圖捕捉，並將 `product_recommendation` 當作 Tool 調用
+- **Intent 漸進式收集** — 透過對話累積 Intent Profile，時機成熟才觸發產品推薦
  
-  - ### 1.3 現有元件 Reuse 策略
+  ### 1.3 現有元件 Reuse 策略
  
-  - ```
+  ```
     ┌─────────────────────────────────────────────────────────────────┐
     │                     新增: Chat Agent                            │
     │  (負責對話管理、意圖捕捉、決定何時調用 tools)                      │
