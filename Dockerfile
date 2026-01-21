@@ -1,33 +1,46 @@
-FROM python:3.11-slim
+# Multi-stage Docker build for agent-will-smith
+# Optimized for production deployment with uv
+
+# Stage 1: Builder
+FROM python:3.14-slim AS builder
+
+WORKDIR /build
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files and source code
+COPY pyproject.toml uv.lock* README.md ./
+COPY src/ ./src/
+
+# Install dependencies using uv
+# Note: uv.lock is optional - if not present, uv will resolve from pyproject.toml
+RUN uv sync --frozen --no-dev
+
+# Stage 2: Runtime
+FROM python:3.14-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Copy virtual environment from builder
+COPY --from=builder /build/.venv /app/.venv
 
-# Install uv
-RUN pip install uv
+# Copy application code
+COPY src/ ./src/
 
-# Copy project files needed for dependency installation
-COPY pyproject.toml ./
-# Create minimal README.md (needed for pyproject.toml, will be overwritten if actual README.md exists)
-RUN echo "# Agent-Will-Smith API Server" > README.md
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 
-# Install Python dependencies using uv
-RUN uv pip install --system -e .
+USER appuser
 
-# Copy application code (this will overwrite README.md with actual one if it exists)
-COPY . .
+# Add virtual environment to PATH
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app/src
 
-# Create cache directory
-RUN mkdir -p /app/cache
+# Expose port
+EXPOSE 8000
 
-# Expose port (Cloud Run will set PORT env var, defaults to 8080)
-EXPOSE 8080
-
-# Run the application - use PORT env var or default to 8080 (Cloud Run standard)
-CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}
+# Run with uvicorn (using python -m to use the installed module)
+CMD ["python", "-m", "uvicorn", "agent_will_smith.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
