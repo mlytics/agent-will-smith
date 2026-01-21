@@ -6,6 +6,12 @@ Each DTO knows how to transform itself to ProductResult (explicit, type-safe).
 
 from pydantic import BaseModel, Field
 
+from agent_will_smith.agent.product_recommendation.model.product import (
+    ActivityMetadata,
+    ArticleMetadata,
+    BookMetadata,
+    ProductResult,
+)
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 
@@ -25,16 +31,11 @@ class ActivityDTO(BaseModel):
     cover_image_urls: list[str] = Field(default_factory=list, description="List of cover image URLs", examples=[["https://example.com/img1.jpg"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.92])
     
-    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+    def to_product_result(self, vertical: Vertical) -> ProductResult:
         """Transform DTO to domain ProductResult.
         
         Explicit field mapping with typed metadata - DTO owns its transformation.
         """
-        from agent_will_smith.agent.product_recommendation.model.product import (
-            ProductResult,
-            ActivityMetadata,
-        )
-        
         return ProductResult(
             product_id=self.content_id,
             vertical=vertical,
@@ -68,17 +69,12 @@ class BookDTO(BaseModel):
     prices: list[str] = Field(default_factory=list, description="List of prices (various formats)", examples=[["$19.99", "$9.99 (ebook)"]])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.88])
     
-    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+    def to_product_result(self, vertical: Vertical) -> ProductResult:
         """Transform DTO to domain ProductResult.
         
         Explicit field mapping with typed metadata - DTO owns its transformation.
         Note: title_main maps to title (product-specific naming).
         """
-        from agent_will_smith.agent.product_recommendation.model.product import (
-            ProductResult,
-            BookMetadata,
-        )
-        
         return ProductResult(
             product_id=self.content_id,
             vertical=vertical,
@@ -111,17 +107,12 @@ class ArticleDTO(BaseModel):
     publish_time: str | None = Field(None, description="Article publish time (ISO 8601)", examples=["2024-01-15T08:00:00Z"])
     score: float = Field(default=0.0, description="Vector search similarity score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.95])
     
-    def to_product_result(self, vertical: Vertical) -> "ProductResult":
+    def to_product_result(self, vertical: Vertical) -> ProductResult:
         """Transform DTO to domain ProductResult.
         
         Explicit field mapping with typed metadata - DTO owns its transformation.
         Note: content maps to description (product-specific naming).
         """
-        from agent_will_smith.agent.product_recommendation.model.product import (
-            ProductResult,
-            ArticleMetadata,
-        )
-        
         return ProductResult(
             product_id=self.content_id,
             vertical=vertical,
