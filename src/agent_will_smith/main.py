@@ -19,6 +19,7 @@ from agent_will_smith.app.middleware.observability_middleware import Observabili
 from agent_will_smith.app.middleware.auth_middleware import AuthMiddleware
 from agent_will_smith.app.api.system.router import router as system_router
 from agent_will_smith.app.api.product_recommendation.router import router as product_recommendation_router
+from agent_will_smith.app.api.intent_chat.router import router as intent_chat_router
 
 
 # Global container instance
@@ -104,6 +105,16 @@ def create_app() -> FastAPI:
     
     container.wire(modules=["agent_will_smith.app.api.product_recommendation.router"])
 
+    # Intent Chat Agent Container
+    from agent_will_smith.agent.intent_chat.container import Container as IntentChatContainer
+
+    intent_chat_container = IntentChatContainer(
+        core_container=_core_container,
+        infra_container=_infra_container,
+    )
+    intent_chat_container.wire(modules=["agent_will_smith.app.api.intent_chat.router"])
+    logger.info("intent chat agent container initialized")
+
     # 5. FastAPI App
     app = FastAPI(
         title=fastapi_config.app_name,
@@ -126,6 +137,7 @@ def create_app() -> FastAPI:
 
     # Agent routes
     app.include_router(product_recommendation_router, prefix="/api/v1", dependencies=[])
+    app.include_router(intent_chat_router, prefix="/api/v1", dependencies=[])
 
     # Setup graceful shutdown handlers
     setup_signal_handlers(app)
