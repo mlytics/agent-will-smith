@@ -180,6 +180,7 @@ class ResponseNode:
                 or ns.updated_investment_experience is not None
                 or ns.updated_current_assets is not None
                 or ns.updated_financial_goal is not None
+                or ns.updated_signals is not None
             )
 
             if has_updates:
@@ -188,6 +189,7 @@ class ResponseNode:
                     original_score=base_profile.intent_score,
                     updated_score=ns.updated_intent_score,
                     updated_life_stage=ns.updated_life_stage,
+                    updated_signals_count=len(ns.updated_signals) if ns.updated_signals else 0,
                 )
 
                 # Build financial goal from namespace if present
@@ -195,12 +197,18 @@ class ResponseNode:
                 if ns.updated_financial_goal:
                     financial_goal = FinancialGoal(**ns.updated_financial_goal)
 
+                # Build signals from namespace if present
+                from agent_will_smith.agent.intent_chat.state import IntentSignal
+                signals = base_profile.signals
+                if ns.updated_signals:
+                    signals = [IntentSignal(**s) for s in ns.updated_signals]
+
                 return IntentProfile(
                     life_stage=ns.updated_life_stage if ns.updated_life_stage is not None else base_profile.life_stage,
                     risk_preference=ns.updated_risk_preference if ns.updated_risk_preference is not None else base_profile.risk_preference,
                     product_interests=ns.updated_product_interests if ns.updated_product_interests is not None else base_profile.product_interests,
                     intent_score=ns.updated_intent_score if ns.updated_intent_score is not None else base_profile.intent_score,
-                    signals=base_profile.signals,
+                    signals=signals,
                     financial_goal=financial_goal,
                     current_assets=ns.updated_current_assets if ns.updated_current_assets is not None else base_profile.current_assets,
                     investment_experience=ns.updated_investment_experience if ns.updated_investment_experience is not None else base_profile.investment_experience,

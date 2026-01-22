@@ -124,6 +124,10 @@ class ToolExecutionNodeNamespace(BaseModel):
         default=None,
         description="Updated financial goal dict after processing signals (None if no update)",
     )
+    updated_signals: Optional[list[dict]] = Field(
+        default=None,
+        description="Updated signals list after processing (None if no update)",
+    )
 
 
 class ResponseNodeNamespace(BaseModel):

@@ -134,6 +134,7 @@ class ToolExecutionNode:
             updated_investment_experience=updated_profile.investment_experience if new_signals else None,
             updated_current_assets=updated_profile.current_assets if new_signals else None,
             updated_financial_goal=updated_profile.financial_goal.model_dump() if new_signals and updated_profile.financial_goal else None,
+            updated_signals=[s.model_dump() for s in updated_profile.signals] if new_signals else None,
         )
 
         result = {
