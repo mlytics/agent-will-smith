@@ -72,7 +72,7 @@ class ProductRegistry:
     def get_columns(self, vertical: Vertical) -> list[str]:
         """Get columns to fetch for a vertical.
         
-        Derived from DTO: all model fields (metadata + id + title + description + score).
+        Delegates to DTO which knows which fields are DB columns vs computed fields.
         """
         dto_class = self._products[vertical]
-        return list(dto_class.model_fields.keys())
+        return dto_class.get_db_columns()

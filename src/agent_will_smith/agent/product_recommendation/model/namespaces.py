@@ -7,29 +7,18 @@ from agent_will_smith.agent.product_recommendation.model.product import ProductR
 
 
 class IntentNodeNamespace(BaseModel):
-    """State namespace for intent analysis node."""
-    intent: str = Field(
-        ...,
-        description="LLM-generated intent analysis describing user's goals and article themes",
-        min_length=10,
-        max_length=1000,
-        examples=["The user is interested in sustainable living practices. The article focuses on eco-friendly products and lifestyle changes."],
-    )
+    """State namespace for intent analysis node.
+    
+    Note: Internal state populated by LLM - trusted output.
+    """
+    intent: str = Field(..., description="LLM-generated intent analysis describing user's goals and article themes")
 
 
 class SearchNodeNamespace(BaseModel):
-    """State namespace for parallel search node."""
-    results: dict[Vertical, list[ProductResult]] = Field(
-        default_factory=dict,
-        description="Search results grouped by vertical (activities, books, articles)",
-    )
-    status: Literal["complete", "partial"] = Field(
-        default="complete",
-        description="Search completion status: 'complete' if all verticals succeeded, 'partial' if some failed",
-        examples=["complete"],
-    )
-    errors: dict[str, str] = Field(
-        default_factory=dict,
-        description="Error messages by vertical for failed searches",
-        examples=[{"activities": "UpstreamTimeoutError: Vector search timed out after 5.0s"}],
-    )
+    """State namespace for parallel search node.
+    
+    Note: Internal state - trusted workflow outputs.
+    """
+    results: dict[Vertical, list[ProductResult]] = Field(default_factory=dict, description="Search results grouped by vertical (activities, books, articles)")
+    status: Literal["complete", "partial"] = Field(default="complete", description="Search completion status: 'complete' if all verticals succeeded, 'partial' if some failed")
+    errors: dict[str, str] = Field(default_factory=dict, description="Error messages by vertical for failed searches")

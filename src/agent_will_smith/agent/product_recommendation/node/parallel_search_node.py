@@ -72,7 +72,12 @@ class ParallelSearchNode:
                     error_type=type(result).__name__,
                     exc_info=result,
                 )
-                errors[vertical] = f"{type(result).__name__}: {str(result)}"
+                # Include error details for debugging
+                error_msg = f"{type(result).__name__}: {str(result)}"
+                # If it's an AgentException with details, include them
+                if hasattr(result, 'details') and result.details:
+                    error_msg += f" | Details: {result.details}"
+                errors[vertical] = error_msg
                 vertical_results[vertical] = []
             else:
                 vertical_results[vertical] = result

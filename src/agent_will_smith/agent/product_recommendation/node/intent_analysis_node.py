@@ -43,7 +43,8 @@ Question: {question}
 
 Please analyze the intent and key themes of this article and question.
 What is the user looking for? What are the main topics?
-Provide a concise intent summary (2-3 sentences max)."""
+Provide a concise intent summary (2-3 sentences max).
+結果必須要使用繁體中文進行回答"""
 
         self.logger.info(
             "intent analysis invoking llm",

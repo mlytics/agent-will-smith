@@ -99,12 +99,20 @@ class VectorSearchClient:
             return results
 
         except Exception as e:
+            self.logger.error(
+                "vector search failed",
+                index_name=index_name,
+                error_type=type(e).__name__,
+                error=str(e),
+                exc_info=e,
+            )
             raise UpstreamError(
-                "Vector search failed",
+                f"Vector search failed: {type(e).__name__}: {str(e)}",
                 details={
                     "provider": "databricks_vector_search",
                     "operation": "similarity_search",
                     "index_name": index_name,
+                    "error_type": type(e).__name__,
                     "error": str(e),
                 }
             ) from e
