@@ -25,9 +25,46 @@ from agent_will_smith.app.api.intent_chat.dto import (
     QuickQuestionsResponse,
     QuickQuestion,
 )
+from agent_will_smith.app.api.intent_chat.dto import IntentProfileRequest
 from agent_will_smith.agent.intent_chat.container import Container
 from agent_will_smith.agent.intent_chat.agent import Agent
-from agent_will_smith.agent.intent_chat.state import ChatInput, IntentProfile
+from agent_will_smith.agent.intent_chat.state import ChatInput, IntentProfile, IntentSignal, FinancialGoal
+from datetime import datetime
+
+
+def _convert_request_to_intent_profile(req: IntentProfileRequest) -> IntentProfile:
+    """Convert API request DTO to internal IntentProfile."""
+    # Convert signals from request format
+    signals = [
+        IntentSignal(
+            signal_type=s.signal_type,
+            category=s.category,
+            confidence=s.confidence,
+            timestamp=datetime.fromisoformat(s.timestamp),
+        )
+        for s in req.signals
+    ]
+
+    # Convert financial goal if present
+    financial_goal = None
+    if req.financial_goal:
+        financial_goal = FinancialGoal(
+            target_age=req.financial_goal.target_age,
+            target_amount=req.financial_goal.target_amount,
+            timeline=req.financial_goal.timeline,
+            goal_type=req.financial_goal.goal_type,
+        )
+
+    return IntentProfile(
+        life_stage=req.life_stage,
+        risk_preference=req.risk_preference,
+        product_interests=req.product_interests,
+        intent_score=req.intent_score,
+        signals=signals,
+        financial_goal=financial_goal,
+        current_assets=req.current_assets,
+        investment_experience=req.investment_experience,
+    )
 
 
 def _convert_intent_profile_to_response(profile: IntentProfile) -> IntentProfileResponse:
@@ -197,15 +234,10 @@ async def chat_sync_endpoint(
     agent = container.agent()
 
     # Create ChatInput DTO from request body
-    # Convert intent_profile from request if provided
+    # Convert intent_profile from request if provided (includes signals for accumulation)
     initial_intent_profile = None
     if body.intent_profile:
-        initial_intent_profile = IntentProfile(
-            life_stage=body.intent_profile.life_stage,
-            risk_preference=body.intent_profile.risk_preference,
-            product_interests=body.intent_profile.product_interests,
-            intent_score=body.intent_profile.intent_score,
-        )
+        initial_intent_profile = _convert_request_to_intent_profile(body.intent_profile)
 
     input_dto = ChatInput(
         message=body.message,
@@ -301,15 +333,10 @@ async def chat_streaming_endpoint(
     )
 
     # Create ChatInput DTO from request body
-    # Convert intent_profile from request if provided
+    # Convert intent_profile from request if provided (includes signals for accumulation)
     initial_intent_profile = None
     if body.intent_profile:
-        initial_intent_profile = IntentProfile(
-            life_stage=body.intent_profile.life_stage,
-            risk_preference=body.intent_profile.risk_preference,
-            product_interests=body.intent_profile.product_interests,
-            intent_score=body.intent_profile.intent_score,
-        )
+        initial_intent_profile = _convert_request_to_intent_profile(body.intent_profile)
 
     input_dto = ChatInput(
         message=body.message,
