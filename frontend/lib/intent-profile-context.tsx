@@ -12,6 +12,10 @@ const defaultProfile: IntentProfile = {
   risk_preference: null,
   product_interests: [],
   intent_score: 0,
+  signals: [],
+  financial_goal: null,
+  current_assets: null,
+  investment_experience: null,
 };
 
 interface IntentProfileContextType {
