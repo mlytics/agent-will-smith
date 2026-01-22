@@ -106,3 +106,165 @@ class TestIntentCaptureTool:
                 confidence=0.7,
             )
             assert result["signal_type"] == signal_type
+
+    def test_capture_with_life_stage(self):
+        """Test capture with life_stage parameter."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="retirement",
+            signal_type="inferred",
+            confidence=0.8,
+            life_stage="pre_retirement",
+        )
+        assert result["life_stage"] == "pre_retirement"
+
+    def test_capture_with_risk_preference(self):
+        """Test capture with risk_preference parameter."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="investment",
+            signal_type="explicit",
+            confidence=0.85,
+            risk_preference="aggressive",
+        )
+        assert result["risk_preference"] == "aggressive"
+
+    def test_capture_with_financial_goal(self):
+        """Test capture with financial goal parameters."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="retirement",
+            signal_type="explicit",
+            confidence=0.9,
+            target_age=50,
+            target_amount="2000萬",
+            timeline="5年",
+            goal_type="retirement",
+        )
+        assert result["target_age"] == 50
+        assert result["target_amount"] == "2000萬"
+        assert result["timeline"] == "5年"
+        assert result["goal_type"] == "retirement"
+
+    def test_capture_with_assets_and_experience(self):
+        """Test capture with current_assets and investment_experience."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="investment",
+            signal_type="explicit",
+            confidence=0.8,
+            current_assets="1000萬台幣",
+            investment_experience="intermediate",
+        )
+        assert result["current_assets"] == "1000萬台幣"
+        assert result["investment_experience"] == "intermediate"
+
+    def test_capture_full_parameters(self):
+        """Test capture with all parameters filled."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="retirement",
+            signal_type="clarified",
+            confidence=0.95,
+            life_stage="pre_retirement",
+            risk_preference="aggressive",
+            investment_experience="experienced",
+            target_age=50,
+            target_amount="2000萬",
+            timeline="5年",
+            goal_type="retirement",
+            current_assets="1000萬台幣",
+        )
+        assert result["category"] == "retirement"
+        assert result["life_stage"] == "pre_retirement"
+        assert result["risk_preference"] == "aggressive"
+        assert result["investment_experience"] == "experienced"
+        assert result["target_age"] == 50
+        assert result["target_amount"] == "2000萬"
+        assert result["current_assets"] == "1000萬台幣"
+
+    def test_optional_fields_not_included_when_none(self):
+        """Test that optional fields are not included in result when None."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        result = capture_intent(
+            category="retirement",
+            signal_type="explicit",
+            confidence=0.9,
+        )
+        # Only required fields and type/timestamp should be in result
+        assert "life_stage" not in result
+        assert "risk_preference" not in result
+        assert "investment_experience" not in result
+        assert "target_age" not in result
+        assert "target_amount" not in result
+        assert "timeline" not in result
+        assert "goal_type" not in result
+        assert "current_assets" not in result
+
+    def test_validate_risk_preference(self):
+        """Test that risk_preference validates allowed values."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        # Valid values should work
+        for pref in ["conservative", "moderate", "aggressive"]:
+            result = capture_intent(
+                category="investment",
+                signal_type="explicit",
+                confidence=0.8,
+                risk_preference=pref,
+            )
+            assert result["risk_preference"] == pref
+
+        # Invalid value should raise
+        with pytest.raises(ValueError, match="risk_preference"):
+            capture_intent(
+                category="investment",
+                signal_type="explicit",
+                confidence=0.8,
+                risk_preference="invalid_preference",
+            )
+
+    def test_validate_investment_experience(self):
+        """Test that investment_experience validates allowed values."""
+        from agent_will_smith.agent.intent_chat.tools.intent_capture_tool import (
+            capture_intent,
+        )
+
+        # Valid values should work
+        for exp in ["beginner", "intermediate", "experienced"]:
+            result = capture_intent(
+                category="investment",
+                signal_type="explicit",
+                confidence=0.8,
+                investment_experience=exp,
+            )
+            assert result["investment_experience"] == exp
+
+        # Invalid value should raise
+        with pytest.raises(ValueError, match="investment_experience"):
+            capture_intent(
+                category="investment",
+                signal_type="explicit",
+                confidence=0.8,
+                investment_experience="invalid_experience",
+            )
