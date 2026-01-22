@@ -102,6 +102,22 @@ class IntentProfile(BaseModel):
         default_factory=list,
         description="History of detected intent signals",
     )
+    financial_goal: Optional[FinancialGoal] = Field(
+        default=None,
+        description="User's financial goal if detected",
+    )
+    current_assets: Optional[str] = Field(
+        default=None,
+        description="User's current assets if mentioned (e.g., '1000萬台幣')",
+        max_length=100,
+        examples=["1000萬台幣", "NT$ 500,000"],
+    )
+    investment_experience: Optional[str] = Field(
+        default=None,
+        description="User's investment experience level",
+        max_length=50,
+        examples=["beginner", "intermediate", "experienced"],
+    )
 
 
 class ChatInput(BaseModel):
