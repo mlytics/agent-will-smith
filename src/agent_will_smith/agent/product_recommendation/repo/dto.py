@@ -109,15 +109,20 @@ class ArticleDTO(BaseModel):
     
     def to_product_result(self, vertical: Vertical) -> ProductResult:
         """Transform DTO to domain ProductResult.
-        
+
         Explicit field mapping with typed metadata - DTO owns its transformation.
         Note: content maps to description (product-specific naming).
         """
+        # Truncate description to fit ProductResult max_length constraint (5000 chars)
+        description = self.content
+        if description and len(description) > 4990:
+            description = description[:4990] + "..."
+
         return ProductResult(
             product_id=self.content_id,
             vertical=vertical,
             title=self.title,
-            description=self.content,  # Explicit: content → description
+            description=description,
             relevance_score=self.score,
             metadata=ArticleMetadata(
                 authors=self.authors,
