@@ -105,7 +105,7 @@ export function IntentProfilePanel() {
         <SignalHistory signals={profile.signals} />
 
         {/* Empty State */}
-        {!hasProfileData && profile.signals.length === 0 && (
+        {!hasProfileData && (!profile.signals || profile.signals.length === 0) && (
           <div className="rounded-xl border border-dashed border-border/50 bg-muted/30 p-6 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary">
               <SparklesIcon className="h-5 w-5 text-muted-foreground" />
@@ -119,7 +119,7 @@ export function IntentProfilePanel() {
       </div>
 
       {/* Fixed footer */}
-      <SessionStats turnCount={turnCount} signalCount={profile.signals.length} />
+      <SessionStats turnCount={turnCount} signalCount={profile.signals?.length ?? 0} />
     </div>
   );
 }

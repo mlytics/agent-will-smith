@@ -47,7 +47,7 @@ function formatConfidence(confidence: number): string {
 export function SignalHistory({ signals }: SignalHistoryProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  if (signals.length === 0) {
+  if (!signals || signals.length === 0) {
     return null;
   }
 
