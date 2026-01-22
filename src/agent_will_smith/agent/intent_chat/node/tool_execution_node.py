@@ -112,8 +112,19 @@ class ToolExecutionNode:
             new_signals=len(new_signals),
         )
 
+        # Build tool result messages for the LLM context
+        tool_messages = []
+        for tr in tool_results:
+            tool_messages.append({
+                "role": "tool",
+                "content": str(tr.result) if tr.result else tr.error or "",
+                "tool_call_id": tr.tool_call_id,
+            })
+
         result = {
             "tool_execution_node": ToolExecutionNodeNamespace(tool_results=tool_results),
+            "current_tool_calls": [],  # Clear tool calls after execution
+            "messages": state.messages + tool_messages,  # Add tool results to messages
         }
 
         if new_signals:

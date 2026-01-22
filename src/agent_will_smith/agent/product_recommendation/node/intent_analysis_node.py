@@ -33,22 +33,32 @@ class IntentAnalysisNode:
         article = state.input.article
         question = state.input.question
 
-        article_excerpt = article[:1000]
-        if len(article) > 1000:
-            article_excerpt += "..."
+        # Build user message based on whether article is provided
+        if article:
+            article_excerpt = article[:1000]
+            if len(article) > 1000:
+                article_excerpt += "..."
 
-        user_message = f"""Article: {article_excerpt}
+            user_message = f"""Article: {article_excerpt}
 
 Question: {question}
 
 Please analyze the intent and key themes of this article and question.
 What is the user looking for? What are the main topics?
 Provide a concise intent summary (2-3 sentences max)."""
+        else:
+            # No article - analyze based on question only
+            user_message = f"""User Question: {question}
+
+Please analyze the user's intent based on their question.
+What is the user looking for? What are the main topics they're interested in?
+Provide a concise intent summary (2-3 sentences max)."""
 
         self.logger.info(
             "intent analysis invoking llm",
-            article_length=len(article_excerpt),
+            article_length=len(article) if article else 0,
             question_length=len(question),
+            has_article=bool(article),
         )
 
         response = self.llm_client.invoke(

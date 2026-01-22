@@ -19,6 +19,10 @@ class MLFlowConfig(BaseSettings):
     registry_uri: Optional[str] = Field(None, description="MLFlow registry URI")
     experiment_id: Optional[str] = Field(None, description="MLFlow experiment ID")
     enable_tracing: bool = Field(default=False, description="Enable MLFlow tracing")
+    prompt_fallback_dir: Optional[str] = Field(
+        None,
+        description="Directory for fallback prompt files when MLflow GenAI unavailable"
+    )
 
     @model_validator(mode="after")
     def check_tracking_config(self) -> "MLFlowConfig":

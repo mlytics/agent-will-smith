@@ -71,8 +71,11 @@ class ProductRegistry:
 
     def get_columns(self, vertical: Vertical) -> list[str]:
         """Get columns to fetch for a vertical.
-        
-        Derived from DTO: all model fields (metadata + id + title + description + score).
+
+        Derived from DTO: all model fields except 'score'.
+        Score is returned automatically by Databricks Vector Search,
+        not stored as a column in the index.
         """
         dto_class = self._products[vertical]
-        return list(dto_class.model_fields.keys())
+        # Exclude 'score' - it's returned by vector search API, not a column
+        return [col for col in dto_class.model_fields.keys() if col != "score"]

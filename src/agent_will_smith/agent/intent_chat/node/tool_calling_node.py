@@ -7,7 +7,7 @@ This node handles the "thinking" phase where the LLM decides whether to use tool
 from typing import Any
 
 import structlog
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 
 from agent_will_smith.agent.intent_chat.state import ChatState
 from agent_will_smith.agent.intent_chat.model.namespaces import (
@@ -79,7 +79,16 @@ class ToolCallingNode:
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
+                # Include tool_calls if present
+                ai_msg = AIMessage(content=msg["content"])
+                if msg.get("tool_calls"):
+                    ai_msg.tool_calls = msg["tool_calls"]
+                messages.append(ai_msg)
+            elif msg["role"] == "tool":
+                messages.append(ToolMessage(
+                    content=msg["content"],
+                    tool_call_id=msg.get("tool_call_id", ""),
+                ))
 
         # Bind tools and invoke
         llm_with_tools = self.llm_client.bind_tools(self.tools)
@@ -101,18 +110,73 @@ class ToolCallingNode:
             for tc in tool_calls
         ]
 
+        # Extract text content from response (may be string or list of content blocks)
+        response_text = self._extract_text_content(response.content)
+
         self.logger.info(
             "tool calling node completed",
             num_tool_calls=len(tool_calls),
             tool_names=[tc["name"] for tc in tool_calls],
-            has_content=bool(response.content),
+            has_content=bool(response_text),
         )
+
+        # Build assistant message with tool calls if any
+        assistant_msg = {
+            "role": "assistant",
+            "content": response_text,
+        }
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
 
         return {
             "tool_calling_node": ToolCallingNodeNamespace(tool_calls=namespace_tool_calls),
             "current_tool_calls": tool_calls,
-            "messages": state.messages + [{"role": "assistant", "content": response.content or ""}],
+            "messages": state.messages + [assistant_msg],
+            "step_count": state.step_count + 1,
         }
+
+    def _extract_text_content(self, content) -> str:
+        """Extract text from response content (handles string, JSON string, and content blocks).
+
+        Args:
+            content: Response content - may be string, JSON string, or list of content blocks
+
+        Returns:
+            Extracted text as string
+        """
+        import json
+
+        if content is None:
+            return ""
+
+        # If it's a string, check if it's a JSON array of content blocks
+        if isinstance(content, str):
+            # Try to parse as JSON
+            if content.startswith("["):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        return self._extract_from_blocks(parsed)
+                except json.JSONDecodeError:
+                    pass
+            return content
+
+        # If it's a list of content blocks, extract text parts
+        if isinstance(content, list):
+            return self._extract_from_blocks(content)
+
+        # Fallback: convert to string
+        return str(content)
+
+    def _extract_from_blocks(self, blocks: list) -> str:
+        """Extract text from content blocks."""
+        text_parts = []
+        for block in blocks:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text_parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        return "".join(text_parts)
 
     def _build_intent_context(self, state: ChatState) -> str:
         """Build context string from intent profile for LLM."""

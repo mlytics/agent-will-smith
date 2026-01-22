@@ -28,6 +28,17 @@ class AuthMiddleware:
         self.excluded_paths = set(excluded_paths or [])
 
     async def __call__(self, scope, receive, send):
+        # Skip non-HTTP requests (WebSocket, lifespan, etc.)
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Skip OPTIONS requests (CORS preflight)
+        method = scope.get("method", "").upper()
+        if method == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path") or ""
         if path in self.excluded_paths:
             await self.app(scope, receive, send)

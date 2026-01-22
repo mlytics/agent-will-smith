@@ -9,6 +9,29 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class IntentProfileRequest(BaseModel):
+    """Intent profile in API request (for state persistence)."""
+
+    life_stage: Optional[str] = Field(
+        default=None,
+        description="User's life stage (e.g., early_career, mid_career, retirement)",
+    )
+    risk_preference: Optional[Literal["conservative", "moderate", "aggressive"]] = Field(
+        default=None,
+        description="User's risk preference",
+    )
+    product_interests: list[str] = Field(
+        default_factory=list,
+        description="Products the user has shown interest in",
+    )
+    intent_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Overall intent score (0.0 to 1.0)",
+    )
+
+
 class ChatRequest(BaseModel):
     """Request schema for chat endpoint."""
 
@@ -34,6 +57,10 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="Previous conversation messages for context",
         examples=[[{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi!"}]],
+    )
+    intent_profile: Optional[IntentProfileRequest] = Field(
+        default=None,
+        description="Previous intent profile to restore state (sent back from frontend)",
     )
 
 

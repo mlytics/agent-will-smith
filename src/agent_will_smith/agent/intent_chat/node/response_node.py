@@ -79,8 +79,52 @@ class ResponseNode:
         """
         for msg in reversed(messages):
             if msg.get("role") == "assistant":
-                return msg.get("content", "")
+                content = msg.get("content", "")
+                return self._extract_text_content(content)
         return ""
+
+    def _extract_text_content(self, content) -> str:
+        """Extract text from content (handles string, JSON string, and content blocks).
+
+        Args:
+            content: Content - may be string, JSON string, or list of content blocks
+
+        Returns:
+            Extracted text as string
+        """
+        import json
+
+        if content is None:
+            return ""
+
+        # If it's a string, check if it's a JSON array of content blocks
+        if isinstance(content, str):
+            # Try to parse as JSON
+            if content.startswith("["):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        return self._extract_from_blocks(parsed)
+                except json.JSONDecodeError:
+                    pass
+            return content
+
+        # If it's a list of content blocks, extract text parts
+        if isinstance(content, list):
+            return self._extract_from_blocks(content)
+
+        # Fallback: convert to string
+        return str(content)
+
+    def _extract_from_blocks(self, blocks: list) -> str:
+        """Extract text from content blocks."""
+        text_parts = []
+        for block in blocks:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text_parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        return "".join(text_parts)
 
     def _collect_tool_results(self, state: ChatState) -> list[dict]:
         """Collect tool call results from tool_execution_node namespace.

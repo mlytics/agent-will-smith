@@ -42,6 +42,18 @@ class LLMClient:
         )
         self.logger.info("llm client initialized", endpoint=endpoint)
 
+    def bind_tools(self, tools: list) -> ChatDatabricks:
+        """Bind tools to the LLM for function calling.
+
+        Args:
+            tools: List of tools (functions or LangChain tools) to bind
+
+        Returns:
+            ChatDatabricks instance with bound tools
+        """
+        self.logger.debug("binding tools to llm", num_tools=len(tools))
+        return self._llm.bind_tools(tools)
+
     def invoke(self, messages: list[BaseMessage]) -> AIMessage:
         """Invoke the LLM with a list of LangChain messages.
 

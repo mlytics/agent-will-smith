@@ -55,7 +55,7 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
-  const { updateProfile } = useIntentProfile();
+  const { profile, updateProfile } = useIntentProfile();
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
@@ -75,43 +75,49 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       try {
-        // Use streaming endpoint
-        await streamMessage(userMessage.content, sessionId, messages, {
-          onTextDelta: (text) => {
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const lastIdx = newMessages.length - 1;
-              if (newMessages[lastIdx]?.role === "assistant") {
-                newMessages[lastIdx] = {
-                  ...newMessages[lastIdx],
-                  content: text,
-                };
-              }
-              return newMessages;
-            });
+        // Use streaming endpoint, pass current intent profile for state persistence
+        await streamMessage(
+          userMessage.content,
+          sessionId,
+          messages,
+          {
+            onTextDelta: (text) => {
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                const lastIdx = newMessages.length - 1;
+                if (newMessages[lastIdx]?.role === "assistant") {
+                  newMessages[lastIdx] = {
+                    ...newMessages[lastIdx],
+                    content: text,
+                  };
+                }
+                return newMessages;
+              });
+            },
+            onIntentProfile: (newProfile: IntentProfile) => {
+              updateProfile(newProfile);
+            },
+            onFinish: () => {
+              setIsRunning(false);
+            },
+            onError: (error) => {
+              console.error("Stream error:", error);
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                const lastIdx = newMessages.length - 1;
+                if (newMessages[lastIdx]?.role === "assistant") {
+                  newMessages[lastIdx] = {
+                    ...newMessages[lastIdx],
+                    content: "Sorry, I encountered an error. Please try again.",
+                  };
+                }
+                return newMessages;
+              });
+              setIsRunning(false);
+            },
           },
-          onIntentProfile: (profile: IntentProfile) => {
-            updateProfile(profile);
-          },
-          onFinish: () => {
-            setIsRunning(false);
-          },
-          onError: (error) => {
-            console.error("Stream error:", error);
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const lastIdx = newMessages.length - 1;
-              if (newMessages[lastIdx]?.role === "assistant") {
-                newMessages[lastIdx] = {
-                  ...newMessages[lastIdx],
-                  content: "Sorry, I encountered an error. Please try again.",
-                };
-              }
-              return newMessages;
-            });
-            setIsRunning(false);
-          },
-        });
+          profile  // Pass current intent profile for state persistence
+        );
       } catch (error) {
         console.error("Chat error:", error);
         // Fallback to sync endpoint
@@ -150,7 +156,7 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
         setIsRunning(false);
       }
     },
-    [messages, sessionId, updateProfile]
+    [messages, sessionId, updateProfile, profile]
   );
 
   // Create adapter with convertMessage for custom message format

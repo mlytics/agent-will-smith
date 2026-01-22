@@ -67,8 +67,9 @@ class Agent:
 
         # Define flow:
         # START → conversation_node → tool_calling_node → [conditional]
-        #                                     ├─ has tools → tool_execution_node → response_node → END
+        #                                     ├─ has tools → tool_execution_node → tool_calling_node (loop back for response)
         #                                     └─ no tools  → response_node → END
+        # This loop allows the LLM to generate a response after tool execution.
         workflow.add_edge(START, "conversation_node")
         workflow.add_edge("conversation_node", "tool_calling_node")
         workflow.add_conditional_edges(
@@ -79,23 +80,38 @@ class Agent:
                 "respond": "response_node",
             },
         )
-        workflow.add_edge("tool_execution_node", "response_node")
+        # Loop back to tool_calling_node to generate response after tool execution
+        workflow.add_edge("tool_execution_node", "tool_calling_node")
         workflow.add_edge("response_node", END)
 
         self.graph = workflow.compile()
         self.logger.info("intent chat agent initialized")
 
     def _route_after_tool_calling(self, state: ChatState) -> str:
-        """Route based on whether tool calls were made.
+        """Route based on whether tool calls were made and step count.
 
         Args:
             state: Current chat state
 
         Returns:
-            "execute_tools" if there are tool calls, "respond" otherwise
+            "execute_tools" if there are tool calls and under max steps,
+            "respond" otherwise
         """
+        max_steps = 5  # Prevent infinite loops
+
+        # Check if we've exceeded max steps
+        if state.step_count >= max_steps:
+            self.logger.warning(
+                "max steps reached, forcing response",
+                step_count=state.step_count,
+                max_steps=max_steps,
+            )
+            return "respond"
+
+        # Execute tools if there are any
         if state.current_tool_calls:
             return "execute_tools"
+
         return "respond"
 
     async def invoke(self, input_dto: ChatInput) -> ChatOutput:

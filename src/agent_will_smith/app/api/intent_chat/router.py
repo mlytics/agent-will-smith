@@ -25,7 +25,7 @@ from agent_will_smith.app.api.intent_chat.dto import (
 )
 from agent_will_smith.agent.intent_chat.container import Container
 from agent_will_smith.agent.intent_chat.agent import Agent
-from agent_will_smith.agent.intent_chat.state import ChatInput
+from agent_will_smith.agent.intent_chat.state import ChatInput, IntentProfile
 
 
 router = APIRouter()
@@ -122,11 +122,22 @@ async def chat_sync_endpoint(
     agent = container.agent()
 
     # Create ChatInput DTO from request body
+    # Convert intent_profile from request if provided
+    initial_intent_profile = None
+    if body.intent_profile:
+        initial_intent_profile = IntentProfile(
+            life_stage=body.intent_profile.life_stage,
+            risk_preference=body.intent_profile.risk_preference,
+            product_interests=body.intent_profile.product_interests,
+            intent_score=body.intent_profile.intent_score,
+        )
+
     input_dto = ChatInput(
         message=body.message,
         session_id=body.session_id,
         context=body.context,
         conversation_history=body.conversation_history,
+        initial_intent_profile=initial_intent_profile,
     )
 
     # Invoke agent with DTO - returns ChatOutput DTO
@@ -220,11 +231,22 @@ async def chat_streaming_endpoint(
     )
 
     # Create ChatInput DTO from request body
+    # Convert intent_profile from request if provided
+    initial_intent_profile = None
+    if body.intent_profile:
+        initial_intent_profile = IntentProfile(
+            life_stage=body.intent_profile.life_stage,
+            risk_preference=body.intent_profile.risk_preference,
+            product_interests=body.intent_profile.product_interests,
+            intent_score=body.intent_profile.intent_score,
+        )
+
     input_dto = ChatInput(
         message=body.message,
         session_id=body.session_id,
         context=body.context,
         conversation_history=body.conversation_history,
+        initial_intent_profile=initial_intent_profile,
     )
 
     async def sse_generator() -> AsyncGenerator[str, None]:

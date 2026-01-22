@@ -28,20 +28,22 @@ class ParallelSearchNode:
 
     def _build_search_query(
         self,
-        article: str,
+        article: Optional[str],
         question: str,
         intent: Optional[str] = None
     ) -> str:
         """Build search query deterministically from inputs."""
-        article_context = article[:self.ARTICLE_EXCERPT_LENGTH]
-        if len(article) > self.ARTICLE_EXCERPT_LENGTH:
-            article_context += "..."
-
         query_parts = []
         if intent:
             query_parts.append(f"Intent: {intent}")
         query_parts.append(f"Question: {question}")
-        query_parts.append(f"Context: {article_context}")
+
+        # Add article context if provided
+        if article:
+            article_context = article[:self.ARTICLE_EXCERPT_LENGTH]
+            if len(article) > self.ARTICLE_EXCERPT_LENGTH:
+                article_context += "..."
+            query_parts.append(f"Context: {article_context}")
 
         query = "\n\n".join(query_parts)
 
@@ -49,7 +51,8 @@ class ParallelSearchNode:
             "query built",
             query_length=len(query),
             has_intent=bool(intent),
-            article_length=len(article)
+            article_length=len(article) if article else 0,
+            has_article=bool(article),
         )
 
         return query

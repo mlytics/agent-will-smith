@@ -45,4 +45,5 @@ class Container(containers.DeclarativeContainer):
     prompt_client = providers.Factory(
         PromptClient,
         # prompt_cache_ttl provided by agent container
+        fallback_prompts_dir=core_container.mlflow_config.provided.prompt_fallback_dir,
     )

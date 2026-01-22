@@ -95,6 +95,10 @@ class ChatInput(BaseModel):
         description="Optional context data (e.g., article content, page metadata)",
         examples=[{"article_id": "art-123", "article_title": "Retirement Planning Guide"}],
     )
+    initial_intent_profile: Optional[IntentProfile] = Field(
+        default=None,
+        description="Initial intent profile to restore state from previous request",
+    )
     conversation_history: list[dict[str, str]] = Field(
         default_factory=list,
         description="Previous conversation messages with role and content",
@@ -162,16 +166,28 @@ class ChatState(BaseModel):
         description="LangChain-compatible message list for LLM context",
     )
 
-    # Intent tracking
+    # Intent tracking (initialized from input.initial_intent_profile if provided)
     intent_profile: IntentProfile = Field(
         default_factory=IntentProfile,
         description="Accumulated intent profile from conversation",
     )
 
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize intent_profile from input if provided."""
+        if self.input.initial_intent_profile is not None:
+            # Use the provided intent profile as starting state
+            object.__setattr__(self, "intent_profile", self.input.initial_intent_profile)
+
     # Current turn tool calls (for routing decisions)
     current_tool_calls: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Tool calls in the current turn, used for graph routing",
+    )
+
+    # Step counter for loop prevention
+    step_count: int = Field(
+        default=0,
+        description="Number of tool_calling_node invocations to prevent infinite loops",
     )
 
     # Node namespaces

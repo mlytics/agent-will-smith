@@ -20,17 +20,16 @@ logger = structlog.get_logger(__name__)
 class ProductRecommendationToolInput(BaseModel):
     """Input schema for product recommendation tool."""
 
-    article: str = Field(
-        ...,
-        description="Article text to analyze for product recommendations",
-        min_length=10,
-        max_length=50000,
-    )
     question: str = Field(
         ...,
         description="User question guiding the recommendation intent",
         min_length=5,
         max_length=500,
+    )
+    article: Optional[str] = Field(
+        default=None,
+        description="Optional article text to analyze for product recommendations. If not provided, recommendations are based on the question only.",
+        max_length=50000,
     )
     k: int = Field(
         default=5,
@@ -64,8 +63,8 @@ def get_product_recommendation_agent():
 
 
 async def get_product_recommendations(
-    article: str,
     question: str,
+    article: Optional[str] = None,
     k: int = 5,
     verticals: Optional[list[str]] = None,
     customer_uuid: Optional[str] = None,
@@ -73,8 +72,8 @@ async def get_product_recommendations(
     """Get product recommendations by invoking the product_recommendation agent.
 
     Args:
-        article: Article text to analyze
         question: User question guiding the recommendation
+        article: Optional article text to analyze (if not provided, uses question only)
         k: Number of products per vertical
         verticals: Product verticals to search
         customer_uuid: Optional customer UUID for multi-tenant isolation
@@ -87,10 +86,11 @@ async def get_product_recommendations(
 
     logger.info(
         "product recommendation tool invoked",
-        article_length=len(article),
+        article_length=len(article) if article else 0,
         question_length=len(question),
         k=k,
         verticals=verticals,
+        has_article=bool(article),
     )
 
     try:
@@ -147,21 +147,25 @@ async def get_product_recommendations(
 
 @tool("product_recommendation", args_schema=ProductRecommendationToolInput)
 async def product_recommendation_tool(
-    article: str,
     question: str,
+    article: Optional[str] = None,
     k: int = 5,
     verticals: Optional[list[str]] = None,
     customer_uuid: Optional[str] = None,
 ) -> dict:
-    """Get product recommendations based on article content and user question.
+    """Get product recommendations based on user question and optional article content.
 
-    Analyzes the article and question to find relevant products (activities, books, articles)
-    using semantic search and LLM reasoning. Use this tool when the user shows clear intent
-    to explore or purchase products related to topics in the conversation.
+    Searches for relevant products (activities, books, articles) using semantic search
+    and LLM reasoning. Use this tool when the user shows clear intent to explore or
+    purchase products related to topics in the conversation.
+
+    Can work in two modes:
+    - With article: Analyzes article content + question for contextual recommendations
+    - Without article: Uses just the question to find relevant products
 
     Args:
-        article: Article text to analyze for recommendations
         question: User question guiding what products to recommend
+        article: Optional article text for additional context
         k: Number of products per vertical (1-10)
         verticals: Product types to search (activities, books, articles)
         customer_uuid: Optional customer ID for personalization
@@ -170,8 +174,8 @@ async def product_recommendation_tool(
         Dictionary with product recommendations grouped by vertical
     """
     return await get_product_recommendations(
-        article=article,
         question=question,
+        article=article,
         k=k,
         verticals=verticals,
         customer_uuid=customer_uuid,

@@ -14,10 +14,9 @@ from agent_will_smith.agent.product_recommendation.model.namespaces import (
 
 class AgentInput(BaseModel):
     """Input DTO for agent invocation and state namespace."""
-    article: str = Field(
-        ...,
-        description="Original article text to analyze for product recommendations",
-        min_length=10,
+    article: Optional[str] = Field(
+        default=None,
+        description="Original article text to analyze for product recommendations (optional - can search based on question only)",
         max_length=50000,
         examples=["This article discusses sustainable living and eco-friendly products for modern households..."],
     )

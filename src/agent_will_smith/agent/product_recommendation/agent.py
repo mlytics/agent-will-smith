@@ -100,7 +100,7 @@ class Agent:
 
         self.logger.info(
             "execution started",
-            article_length=len(input_dto.article),
+            article_length=len(input_dto.article) if input_dto.article else 0,
             question_length=len(input_dto.question),
             verticals=input_dto.verticals,
             k=input_dto.k,
@@ -121,14 +121,14 @@ class Agent:
             self.logger.error(
                 "agent execution timeout",
                 timeout_seconds=self.agent_config.agent_timeout_seconds,
-                article_length=len(input_dto.article),
+                article_length=len(input_dto.article) if input_dto.article else 0,
                 verticals=input_dto.verticals,
             )
             raise AgentTimeoutError(
                 "Agent execution exceeded timeout",
                 details={
                     "timeout_seconds": self.agent_config.agent_timeout_seconds,
-                    "article_length": len(input_dto.article),
+                    "article_length": len(input_dto.article) if input_dto.article else 0,
                     "verticals": input_dto.verticals,
                 }
             ) from e

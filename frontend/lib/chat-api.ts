@@ -20,7 +20,8 @@ export async function streamMessage(
   message: string,
   sessionId: string,
   conversationHistory: Message[],
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  intentProfile?: IntentProfile | null
 ): Promise<void> {
   const history = conversationHistory.map((m) => ({
     role: m.role,
@@ -38,6 +39,7 @@ export async function streamMessage(
         message,
         session_id: sessionId,
         conversation_history: history,
+        intent_profile: intentProfile || undefined,
       }),
     });
 
