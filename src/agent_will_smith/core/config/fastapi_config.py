@@ -10,6 +10,7 @@ class FastAPIConfig(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="CORE_FASTAPI_",
         case_sensitive=False,
+        extra="ignore",
     )
 
     app_name: str = Field(default="agent-will-smith", description="Application name")

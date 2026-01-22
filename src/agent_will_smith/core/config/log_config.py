@@ -11,6 +11,7 @@ class LogConfig(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="CORE_LOG_",
         case_sensitive=False,
+        extra="ignore",
     )
 
     level: Literal["debug", "info", "warning", "error", "fatal"] = Field(

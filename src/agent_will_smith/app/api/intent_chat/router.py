@@ -4,6 +4,7 @@ Follows guideline: "1 HTTP URL ↔ 1 agent"
 Each endpoint maps to a single agent.
 """
 
+import os
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
@@ -11,6 +12,9 @@ from fastapi.responses import StreamingResponse
 import structlog
 
 from dependency_injector.wiring import inject, Provide
+
+# Enable mock mode for local development without Databricks
+MOCK_MODE = os.getenv("INTENT_CHAT_MOCK_MODE", "false").lower() == "true"
 
 from agent_will_smith.app.api.intent_chat.dto import (
     ChatRequest,
@@ -52,6 +56,22 @@ QUICK_QUESTIONS = [
 ]
 
 
+def _mock_chat_response(message: str, session_id: str) -> ChatResponse:
+    """Generate a mock chat response for local development."""
+    return ChatResponse(
+        response=f"Thanks for your question! I'm the Intent Advisor assistant. You asked: '{message}'. In a production environment, I would analyze your financial goals and help guide your investment journey. For now, I'm running in mock mode for local development.",
+        intent_profile=IntentProfileResponse(
+            life_stage="accumulation",
+            risk_preference="moderate",
+            product_interests=["retirement", "investments"],
+            intent_score=0.5,
+        ),
+        tool_calls=[],
+        session_id=session_id,
+        is_complete=False,
+    )
+
+
 @router.post(
     "/chat/sync",
     response_model=ChatResponse,
@@ -67,18 +87,15 @@ QUICK_QUESTIONS = [
     """,
     tags=["Chat"],
 )
-@inject
 async def chat_sync_endpoint(
     request: Request,
     body: ChatRequest,
-    agent: Agent = Depends(Provide[Container.agent]),
 ) -> ChatResponse:
     """Synchronous chat endpoint - maps 1:1 to Agent.
 
     Args:
         request: FastAPI request (for trace_id)
         body: Request payload with message and session_id
-        agent: Injected Agent from DI container
 
     Returns:
         ChatResponse with agent's response and intent profile
@@ -91,7 +108,18 @@ async def chat_sync_endpoint(
         trace_id=trace_id,
         message_length=len(body.message),
         session_id=body.session_id,
+        mock_mode=MOCK_MODE,
     )
+
+    if MOCK_MODE:
+        # Mock response for local development - no agent needed
+        logger.info("mock mode enabled, returning mock response")
+        return _mock_chat_response(body.message, body.session_id)
+
+    # Get agent from container only when not in mock mode
+    from agent_will_smith.agent.intent_chat.container import Container as IntentChatContainer
+    container = IntentChatContainer()
+    agent = container.agent()
 
     # Create ChatInput DTO from request body
     input_dto = ChatInput(
@@ -167,18 +195,15 @@ def quick_questions_endpoint() -> QuickQuestionsResponse:
     """,
     tags=["Chat"],
 )
-@inject
 async def chat_streaming_endpoint(
     request: Request,
     body: ChatRequest,
-    agent: Agent = Depends(Provide[Container.agent]),
 ) -> StreamingResponse:
     """Streaming chat endpoint with SSE.
 
     Args:
         request: FastAPI request (for trace_id)
         body: Request payload with message and session_id
-        agent: Injected Agent from DI container
 
     Returns:
         StreamingResponse with SSE events
@@ -191,6 +216,7 @@ async def chat_streaming_endpoint(
         trace_id=trace_id,
         message_length=len(body.message),
         session_id=body.session_id,
+        mock_mode=MOCK_MODE,
     )
 
     # Create ChatInput DTO from request body
@@ -203,13 +229,47 @@ async def chat_streaming_endpoint(
 
     async def sse_generator() -> AsyncGenerator[str, None]:
         """Generate SSE events from agent execution."""
+        import json
+        import asyncio
+
         try:
+            if MOCK_MODE:
+                # Mock response for local development
+                logger.info("mock mode enabled, returning mock response")
+
+                # Simulate streaming delay
+                mock_response = f"Thanks for your question! I'm the Intent Advisor assistant. You asked: '{body.message}'. In a production environment, I would analyze your financial goals and help guide your investment journey. For now, I'm running in mock mode for local development."
+
+                # Stream the response word by word
+                words = mock_response.split()
+                accumulated = ""
+                for i, word in enumerate(words):
+                    accumulated += word + (" " if i < len(words) - 1 else "")
+                    response_data = {
+                        "response": accumulated,
+                        "intent_profile": {
+                            "life_stage": "accumulation",
+                            "risk_preference": "moderate",
+                            "product_interests": ["retirement", "investments"],
+                            "intent_score": 0.5,
+                        },
+                    }
+                    yield f"event: text-delta\ndata: {json.dumps(response_data)}\n\n"
+                    await asyncio.sleep(0.05)  # Simulate streaming delay
+
+                yield "event: finish\ndata: {}\n\n"
+                return
+
+            # Get agent from container only when not in mock mode
+            from agent_will_smith.agent.intent_chat.container import Container as IntentChatContainer
+            container = IntentChatContainer()
+            agent = container.agent()
+
             # For now, use synchronous invoke and emit single finish event
             # TODO: Implement proper streaming with astream_events
             agent_output = await agent.invoke(input_dto)
 
             # Emit response as single text event
-            import json
             response_data = {
                 "response": agent_output.response,
                 "intent_profile": {
@@ -230,7 +290,6 @@ async def chat_streaming_endpoint(
                 trace_id=trace_id,
                 error=str(e),
             )
-            import json
             error_data = {"error": str(e)}
             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
 

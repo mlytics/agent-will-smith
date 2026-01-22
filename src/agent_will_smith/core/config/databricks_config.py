@@ -12,6 +12,7 @@ class DatabricksConfig(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="CORE_DATABRICKS_",
         case_sensitive=False,
+        extra="ignore",
     )
 
     host: str = Field(..., description="Databricks workspace URL")

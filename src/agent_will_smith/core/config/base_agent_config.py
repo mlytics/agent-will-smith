@@ -6,10 +6,11 @@ identity and prompt caching configuration.
 """
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from semver import Version
 
 class BaseAgentConfig(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
     """Base configuration with common agent metadata.
 
     This base class provides agent identity and prompt caching configuration

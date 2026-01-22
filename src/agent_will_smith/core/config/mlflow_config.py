@@ -12,6 +12,7 @@ class MLFlowConfig(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="CORE_MLFLOW_",
         case_sensitive=False,
+        extra="ignore",
     )
 
     tracking_uri: Optional[str] = Field(None, description="MLFlow tracking URI")

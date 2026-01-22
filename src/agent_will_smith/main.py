@@ -6,6 +6,7 @@ Follows guideline: "One controller of flow" - FastAPI handles HTTP orchestration
 
 import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import mlflow
 import signal
 import structlog
@@ -124,9 +125,20 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if fastapi_config.enable_docs else None,
     )
 
-    # Middleware
+    # Middleware (added in reverse order - last added runs first on requests)
     app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(AuthMiddleware, excluded_paths=["/health", "/ready", "/docs", "/redoc", "/openapi.json"])
+    # CORS must be last (runs first) to handle preflight OPTIONS requests before auth
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Exception handlers
     register_exception_handlers(app)
