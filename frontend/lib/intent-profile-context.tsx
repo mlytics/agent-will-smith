@@ -33,8 +33,15 @@ export function IntentProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<IntentProfile>(defaultProfile);
   const [turnCount, setTurnCount] = useState(0);
 
-  const updateProfile = useCallback((newProfile: IntentProfile) => {
-    setProfile(newProfile);
+  const updateProfile = useCallback((newProfile: Partial<IntentProfile>) => {
+    // Merge with defaults to ensure all fields exist
+    setProfile({
+      ...defaultProfile,
+      ...newProfile,
+      // Ensure arrays are never undefined
+      product_interests: newProfile.product_interests ?? [],
+      signals: newProfile.signals ?? [],
+    });
   }, []);
 
   const resetProfile = useCallback(() => {
