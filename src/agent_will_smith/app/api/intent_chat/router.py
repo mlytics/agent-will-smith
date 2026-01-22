@@ -20,6 +20,8 @@ from agent_will_smith.app.api.intent_chat.dto import (
     ChatRequest,
     ChatResponse,
     IntentProfileResponse,
+    IntentSignalResponse,
+    FinancialGoalResponse,
     QuickQuestionsResponse,
     QuickQuestion,
 )
@@ -28,30 +30,99 @@ from agent_will_smith.agent.intent_chat.agent import Agent
 from agent_will_smith.agent.intent_chat.state import ChatInput, IntentProfile
 
 
+def _convert_intent_profile_to_response(profile: IntentProfile) -> IntentProfileResponse:
+    """Convert internal IntentProfile to API response DTO."""
+    # Convert signals to response format
+    signals = [
+        IntentSignalResponse(
+            signal_type=s.signal_type,
+            category=s.category,
+            confidence=s.confidence,
+            timestamp=s.timestamp.isoformat(),
+        )
+        for s in profile.signals
+    ]
+
+    # Convert financial goal if present
+    financial_goal = None
+    if profile.financial_goal:
+        financial_goal = FinancialGoalResponse(
+            target_age=profile.financial_goal.target_age,
+            target_amount=profile.financial_goal.target_amount,
+            timeline=profile.financial_goal.timeline,
+            goal_type=profile.financial_goal.goal_type,
+        )
+
+    return IntentProfileResponse(
+        life_stage=profile.life_stage,
+        risk_preference=profile.risk_preference,
+        product_interests=profile.product_interests,
+        intent_score=profile.intent_score,
+        signals=signals,
+        financial_goal=financial_goal,
+        current_assets=profile.current_assets,
+        investment_experience=profile.investment_experience,
+    )
+
+
+def _intent_profile_to_dict(profile: IntentProfile) -> dict:
+    """Convert IntentProfile to dict for SSE streaming."""
+    signals = [
+        {
+            "signal_type": s.signal_type,
+            "category": s.category,
+            "confidence": s.confidence,
+            "timestamp": s.timestamp.isoformat(),
+        }
+        for s in profile.signals
+    ]
+
+    financial_goal = None
+    if profile.financial_goal:
+        financial_goal = {
+            "target_age": profile.financial_goal.target_age,
+            "target_amount": profile.financial_goal.target_amount,
+            "timeline": profile.financial_goal.timeline,
+            "goal_type": profile.financial_goal.goal_type,
+        }
+
+    return {
+        "life_stage": profile.life_stage,
+        "risk_preference": profile.risk_preference,
+        "product_interests": profile.product_interests,
+        "intent_score": profile.intent_score,
+        "signals": signals,
+        "financial_goal": financial_goal,
+        "current_assets": profile.current_assets,
+        "investment_experience": profile.investment_experience,
+    }
+
+
 router = APIRouter()
 
 
 # Predefined quick questions for the chat interface
+# These are phrased from the USER's perspective (what they would say/ask)
 QUICK_QUESTIONS = [
     QuickQuestion(
-        id="retirement_goals",
-        text="What are your retirement goals?",
+        id="retirement_planning",
+        text="我想了解退休規劃，有什麼建議？",
         category="retirement",
     ),
     QuickQuestion(
-        id="risk_tolerance",
-        text="What is your risk tolerance for investments?",
+        id="investment_options",
+        text="幫我推薦適合的投資理財產品",
+        category="investment",
+    ),
+    QuickQuestion(
+        id="risk_assessment",
+        text="我想評估自己的風險承受度",
         category="risk",
     ),
     QuickQuestion(
-        id="investment_timeline",
-        text="What is your investment timeline?",
+        id="financial_goals",
+        text="我想開始規劃我的財務目標",
         category="planning",
-    ),
-    QuickQuestion(
-        id="current_savings",
-        text="How much are you currently saving?",
-        category="savings",
     ),
 ]
 
@@ -65,6 +136,10 @@ def _mock_chat_response(message: str, session_id: str) -> ChatResponse:
             risk_preference="moderate",
             product_interests=["retirement", "investments"],
             intent_score=0.5,
+            signals=[],
+            financial_goal=None,
+            current_assets=None,
+            investment_experience=None,
         ),
         tool_calls=[],
         session_id=session_id,
@@ -155,12 +230,7 @@ async def chat_sync_endpoint(
     # Transform ChatOutput to ChatResponse
     return ChatResponse(
         response=agent_output.response,
-        intent_profile=IntentProfileResponse(
-            life_stage=agent_output.intent_profile.life_stage,
-            risk_preference=agent_output.intent_profile.risk_preference,
-            product_interests=agent_output.intent_profile.product_interests,
-            intent_score=agent_output.intent_profile.intent_score,
-        ),
+        intent_profile=_convert_intent_profile_to_response(agent_output.intent_profile),
         tool_calls=agent_output.tool_calls,
         session_id=agent_output.session_id,
         is_complete=agent_output.is_complete,
@@ -265,16 +335,21 @@ async def chat_streaming_endpoint(
                 # Stream the response word by word
                 words = mock_response.split()
                 accumulated = ""
+                mock_intent_profile = {
+                    "life_stage": "accumulation",
+                    "risk_preference": "moderate",
+                    "product_interests": ["retirement", "investments"],
+                    "intent_score": 0.5,
+                    "signals": [],
+                    "financial_goal": None,
+                    "current_assets": None,
+                    "investment_experience": None,
+                }
                 for i, word in enumerate(words):
                     accumulated += word + (" " if i < len(words) - 1 else "")
                     response_data = {
                         "response": accumulated,
-                        "intent_profile": {
-                            "life_stage": "accumulation",
-                            "risk_preference": "moderate",
-                            "product_interests": ["retirement", "investments"],
-                            "intent_score": 0.5,
-                        },
+                        "intent_profile": mock_intent_profile,
                     }
                     yield f"event: text-delta\ndata: {json.dumps(response_data)}\n\n"
                     await asyncio.sleep(0.05)  # Simulate streaming delay
@@ -294,12 +369,7 @@ async def chat_streaming_endpoint(
             # Emit response as single text event
             response_data = {
                 "response": agent_output.response,
-                "intent_profile": {
-                    "life_stage": agent_output.intent_profile.life_stage,
-                    "risk_preference": agent_output.intent_profile.risk_preference,
-                    "product_interests": agent_output.intent_profile.product_interests,
-                    "intent_score": agent_output.intent_profile.intent_score,
-                },
+                "intent_profile": _intent_profile_to_dict(agent_output.intent_profile),
                 "tool_calls": agent_output.tool_calls,
                 "session_id": agent_output.session_id,
             }

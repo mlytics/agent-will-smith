@@ -64,6 +64,50 @@ class ChatRequest(BaseModel):
     )
 
 
+class IntentSignalResponse(BaseModel):
+    """Intent signal in API response."""
+
+    signal_type: Literal["explicit", "inferred", "clarified"] = Field(
+        ...,
+        description="How the intent was detected",
+    )
+    category: str = Field(
+        ...,
+        description="Intent category",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score (0.0 to 1.0)",
+    )
+    timestamp: str = Field(
+        ...,
+        description="ISO timestamp when signal was detected",
+    )
+
+
+class FinancialGoalResponse(BaseModel):
+    """Financial goal in API response."""
+
+    target_age: Optional[int] = Field(
+        default=None,
+        description="Target age for achieving the goal",
+    )
+    target_amount: Optional[str] = Field(
+        default=None,
+        description="Target amount (e.g., '2000萬')",
+    )
+    timeline: Optional[str] = Field(
+        default=None,
+        description="Timeline (e.g., '5年')",
+    )
+    goal_type: Optional[str] = Field(
+        default=None,
+        description="Type of goal (e.g., retirement, wealth_growth)",
+    )
+
+
 class IntentProfileResponse(BaseModel):
     """Intent profile in API response."""
 
@@ -84,6 +128,22 @@ class IntentProfileResponse(BaseModel):
         ge=0.0,
         le=1.0,
         description="Overall intent score (0.0 to 1.0)",
+    )
+    signals: list[IntentSignalResponse] = Field(
+        default_factory=list,
+        description="History of detected intent signals",
+    )
+    financial_goal: Optional[FinancialGoalResponse] = Field(
+        default=None,
+        description="User's financial goal if detected",
+    )
+    current_assets: Optional[str] = Field(
+        default=None,
+        description="User's current assets if mentioned",
+    )
+    investment_experience: Optional[str] = Field(
+        default=None,
+        description="User's investment experience level",
     )
 
 
