@@ -16,6 +16,36 @@ from agent_will_smith.agent.intent_chat.model.namespaces import (
 )
 
 
+class FinancialGoal(BaseModel):
+    """User's financial goal extracted from conversation."""
+
+    target_age: Optional[int] = Field(
+        default=None,
+        description="Target age for achieving the goal (e.g., retirement age)",
+        ge=18,
+        le=120,
+        examples=[50, 55, 65],
+    )
+    target_amount: Optional[str] = Field(
+        default=None,
+        description="Target amount in user's currency (e.g., '2000萬')",
+        max_length=50,
+        examples=["2000萬", "NT$ 1,000,000"],
+    )
+    timeline: Optional[str] = Field(
+        default=None,
+        description="Timeline to achieve the goal (e.g., '5年')",
+        max_length=50,
+        examples=["5年", "10年內"],
+    )
+    goal_type: Optional[str] = Field(
+        default=None,
+        description="Type of financial goal",
+        max_length=50,
+        examples=["retirement", "wealth_growth", "education", "house"],
+    )
+
+
 class IntentSignal(BaseModel):
     """Represents a detected intent signal from user conversation."""
 
