@@ -22,12 +22,16 @@ interface IntentProfileContextType {
   profile: IntentProfile;
   updateProfile: (profile: IntentProfile) => void;
   resetProfile: () => void;
+  /** Number of conversation turns (user messages) */
+  turnCount: number;
+  incrementTurnCount: () => void;
 }
 
 const IntentProfileContext = createContext<IntentProfileContextType | null>(null);
 
 export function IntentProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<IntentProfile>(defaultProfile);
+  const [turnCount, setTurnCount] = useState(0);
 
   const updateProfile = useCallback((newProfile: IntentProfile) => {
     setProfile(newProfile);
@@ -35,10 +39,17 @@ export function IntentProfileProvider({ children }: { children: ReactNode }) {
 
   const resetProfile = useCallback(() => {
     setProfile(defaultProfile);
+    setTurnCount(0);
+  }, []);
+
+  const incrementTurnCount = useCallback(() => {
+    setTurnCount((prev) => prev + 1);
   }, []);
 
   return (
-    <IntentProfileContext.Provider value={{ profile, updateProfile, resetProfile }}>
+    <IntentProfileContext.Provider
+      value={{ profile, updateProfile, resetProfile, turnCount, incrementTurnCount }}
+    >
       {children}
     </IntentProfileContext.Provider>
   );
