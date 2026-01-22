@@ -39,6 +39,11 @@ class ToolResult(BaseModel):
         min_length=1,
         examples=["call_abc123"],
     )
+    name: str = Field(
+        default="",
+        description="Name of the tool that was executed",
+        examples=["product_recommendation"],
+    )
     result: Optional[dict[str, Any]] = Field(
         default=None,
         description="Successful result from tool execution",
@@ -83,12 +88,41 @@ class ToolCallingNodeNamespace(BaseModel):
 class ToolExecutionNodeNamespace(BaseModel):
     """State namespace for tool execution node.
 
-    Tracks results from executing the requested tools.
+    Tracks results from executing the requested tools and intent profile updates.
     """
 
     tool_results: list[ToolResult] = Field(
         default_factory=list,
         description="Results from tool executions",
+    )
+    updated_intent_score: Optional[float] = Field(
+        default=None,
+        description="Updated intent score after processing signals (None if no update)",
+    )
+    updated_product_interests: Optional[list[str]] = Field(
+        default=None,
+        description="Updated product interests after processing signals (None if no update)",
+    )
+    # New fields for full profile updates
+    updated_life_stage: Optional[str] = Field(
+        default=None,
+        description="Updated life stage after processing signals (None if no update)",
+    )
+    updated_risk_preference: Optional[str] = Field(
+        default=None,
+        description="Updated risk preference after processing signals (None if no update)",
+    )
+    updated_investment_experience: Optional[str] = Field(
+        default=None,
+        description="Updated investment experience after processing signals (None if no update)",
+    )
+    updated_current_assets: Optional[str] = Field(
+        default=None,
+        description="Updated current assets after processing signals (None if no update)",
+    )
+    updated_financial_goal: Optional[dict] = Field(
+        default=None,
+        description="Updated financial goal dict after processing signals (None if no update)",
     )
 
 

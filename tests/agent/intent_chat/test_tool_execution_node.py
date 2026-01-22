@@ -167,3 +167,158 @@ class TestToolExecutionNode:
 
         assert "tool_execution_node" in result
         assert len(result["tool_execution_node"].tool_results) == 0
+
+
+class TestUpdateIntentProfile:
+    """Tests for _update_intent_profile method with new extended fields."""
+
+    def test_update_with_life_stage(self):
+        """Test updating profile with life_stage from signal."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile()
+        signals = [{
+            "type": "intent_signal",
+            "category": "retirement",
+            "signal_type": "explicit",
+            "confidence": 0.9,
+            "life_stage": "pre_retirement",
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.life_stage == "pre_retirement"
+
+    def test_update_with_risk_preference(self):
+        """Test updating profile with risk_preference from signal."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile()
+        signals = [{
+            "type": "intent_signal",
+            "category": "investment",
+            "signal_type": "explicit",
+            "confidence": 0.85,
+            "risk_preference": "aggressive",
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.risk_preference == "aggressive"
+
+    def test_update_with_financial_goal(self):
+        """Test updating profile with financial goal fields from signal."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile()
+        signals = [{
+            "type": "intent_signal",
+            "category": "retirement",
+            "signal_type": "explicit",
+            "confidence": 0.9,
+            "target_age": 50,
+            "target_amount": "2000萬",
+            "timeline": "5年",
+            "goal_type": "retirement",
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.financial_goal is not None
+        assert updated.financial_goal.target_age == 50
+        assert updated.financial_goal.target_amount == "2000萬"
+        assert updated.financial_goal.timeline == "5年"
+        assert updated.financial_goal.goal_type == "retirement"
+
+    def test_update_with_assets_and_experience(self):
+        """Test updating profile with current_assets and investment_experience."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile()
+        signals = [{
+            "type": "intent_signal",
+            "category": "investment",
+            "signal_type": "explicit",
+            "confidence": 0.8,
+            "current_assets": "1000萬台幣",
+            "investment_experience": "intermediate",
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.current_assets == "1000萬台幣"
+        assert updated.investment_experience == "intermediate"
+
+    def test_preserves_existing_values(self):
+        """Test that existing profile values are preserved if not in signal."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile(
+            life_stage="mid_career",
+            risk_preference="moderate",
+        )
+        signals = [{
+            "type": "intent_signal",
+            "category": "retirement",
+            "signal_type": "explicit",
+            "confidence": 0.9,
+            "target_age": 55,
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.life_stage == "mid_career"  # Preserved
+        assert updated.risk_preference == "moderate"  # Preserved
+        assert updated.financial_goal.target_age == 55  # Updated
+
+    def test_updates_signal_from_new_values_override_none(self):
+        """Test that signal values override None in existing profile."""
+        from agent_will_smith.agent.intent_chat.node.tool_execution_node import (
+            ToolExecutionNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import IntentProfile
+
+        mock_config = MagicMock()
+        node = ToolExecutionNode(config=mock_config)
+        current = IntentProfile(
+            life_stage=None,
+            risk_preference=None,
+        )
+        signals = [{
+            "type": "intent_signal",
+            "category": "retirement",
+            "signal_type": "explicit",
+            "confidence": 0.9,
+            "life_stage": "early_career",
+            "risk_preference": "conservative",
+        }]
+
+        updated = node._update_intent_profile(current, signals)
+
+        assert updated.life_stage == "early_career"
+        assert updated.risk_preference == "conservative"

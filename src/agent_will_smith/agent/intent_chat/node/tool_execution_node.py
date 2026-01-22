@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from agent_will_smith.agent.intent_chat.state import ChatState, IntentProfile, IntentSignal
+from agent_will_smith.agent.intent_chat.state import ChatState, FinancialGoal, IntentProfile, IntentSignal
 from agent_will_smith.agent.intent_chat.model.namespaces import (
     ToolExecutionNodeNamespace,
     ToolResult,
@@ -78,6 +78,7 @@ class ToolExecutionNode:
                 tool_results.append(
                     ToolResult(
                         tool_call_id=tool_id,
+                        name=tool_name,
                         result=result,
                         error=None,
                     )
@@ -97,6 +98,7 @@ class ToolExecutionNode:
                 tool_results.append(
                     ToolResult(
                         tool_call_id=tool_id,
+                        name=tool_name,
                         result=None,
                         error=f"Tool '{tool_name}' not found or failed: {str(e)}",
                     )
@@ -110,6 +112,7 @@ class ToolExecutionNode:
             num_results=len(tool_results),
             num_errors=sum(1 for r in tool_results if r.error),
             new_signals=len(new_signals),
+            updated_intent_score=updated_profile.intent_score if new_signals else None,
         )
 
         # Build tool result messages for the LLM context
@@ -121,12 +124,25 @@ class ToolExecutionNode:
                 "tool_call_id": tr.tool_call_id,
             })
 
+        # Build namespace with optional intent profile updates
+        namespace = ToolExecutionNodeNamespace(
+            tool_results=tool_results,
+            updated_intent_score=updated_profile.intent_score if new_signals else None,
+            updated_product_interests=list(updated_profile.product_interests) if new_signals else None,
+            updated_life_stage=updated_profile.life_stage if new_signals else None,
+            updated_risk_preference=updated_profile.risk_preference if new_signals else None,
+            updated_investment_experience=updated_profile.investment_experience if new_signals else None,
+            updated_current_assets=updated_profile.current_assets if new_signals else None,
+            updated_financial_goal=updated_profile.financial_goal.model_dump() if new_signals and updated_profile.financial_goal else None,
+        )
+
         result = {
-            "tool_execution_node": ToolExecutionNodeNamespace(tool_results=tool_results),
+            "tool_execution_node": namespace,
             "current_tool_calls": [],  # Clear tool calls after execution
             "messages": state.messages + tool_messages,  # Add tool results to messages
         }
 
+        # Also try direct state update (may not work with nested Pydantic models)
         if new_signals:
             result["intent_profile"] = updated_profile
 
@@ -204,10 +220,55 @@ class ToolExecutionNode:
         for signal_dict in new_signals:
             product_interests.add(signal_dict["category"])
 
+        # Extract new profile fields from signals (use latest value from signals)
+        new_life_stage = current_profile.life_stage
+        new_risk_preference = current_profile.risk_preference
+        new_current_assets = current_profile.current_assets
+        new_investment_experience = current_profile.investment_experience
+
+        # Financial goal fields - start with current or None
+        goal_target_age = current_profile.financial_goal.target_age if current_profile.financial_goal else None
+        goal_target_amount = current_profile.financial_goal.target_amount if current_profile.financial_goal else None
+        goal_timeline = current_profile.financial_goal.timeline if current_profile.financial_goal else None
+        goal_type = current_profile.financial_goal.goal_type if current_profile.financial_goal else None
+
+        # Update from signals (later signals override earlier ones)
+        for signal_dict in new_signals:
+            if signal_dict.get("life_stage") is not None:
+                new_life_stage = signal_dict["life_stage"]
+            if signal_dict.get("risk_preference") is not None:
+                new_risk_preference = signal_dict["risk_preference"]
+            if signal_dict.get("current_assets") is not None:
+                new_current_assets = signal_dict["current_assets"]
+            if signal_dict.get("investment_experience") is not None:
+                new_investment_experience = signal_dict["investment_experience"]
+            # Financial goal fields
+            if signal_dict.get("target_age") is not None:
+                goal_target_age = signal_dict["target_age"]
+            if signal_dict.get("target_amount") is not None:
+                goal_target_amount = signal_dict["target_amount"]
+            if signal_dict.get("timeline") is not None:
+                goal_timeline = signal_dict["timeline"]
+            if signal_dict.get("goal_type") is not None:
+                goal_type = signal_dict["goal_type"]
+
+        # Build financial goal if any field is set
+        new_financial_goal = None
+        if any([goal_target_age, goal_target_amount, goal_timeline, goal_type]):
+            new_financial_goal = FinancialGoal(
+                target_age=goal_target_age,
+                target_amount=goal_target_amount,
+                timeline=goal_timeline,
+                goal_type=goal_type,
+            )
+
         return IntentProfile(
-            life_stage=current_profile.life_stage,
-            risk_preference=current_profile.risk_preference,
+            life_stage=new_life_stage,
+            risk_preference=new_risk_preference,
             product_interests=list(product_interests),
             intent_score=min(new_score, 1.0),  # Cap at 1.0
             signals=updated_signals,
+            financial_goal=new_financial_goal,
+            current_assets=new_current_assets,
+            investment_experience=new_investment_experience,
         )
