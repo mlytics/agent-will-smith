@@ -179,3 +179,84 @@ class TestResponseNode:
         assert output.intent_profile.life_stage == "mid_career"
         assert output.intent_profile.risk_preference == "moderate"
         assert output.intent_profile.intent_score == 0.8
+
+
+class TestGetUpdatedIntentProfile:
+    """Tests for _get_updated_intent_profile method."""
+
+    def test_applies_financial_goal_from_namespace(self):
+        """Test that financial_goal is applied from namespace."""
+        from agent_will_smith.agent.intent_chat.node.response_node import (
+            ResponseNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import (
+            ChatState,
+            ChatInput,
+        )
+        from agent_will_smith.agent.intent_chat.model.namespaces import (
+            ToolExecutionNodeNamespace,
+        )
+
+        node = ResponseNode()
+
+        input_data = ChatInput(
+            message="test",
+            session_id="550e8400-e29b-41d4-a716-446655440000",
+        )
+        state = ChatState(input=input_data)
+
+        state.tool_execution_node = ToolExecutionNodeNamespace(
+            tool_results=[],
+            updated_intent_score=0.9,
+            updated_product_interests=["retirement"],
+            updated_financial_goal={
+                "target_age": 50,
+                "target_amount": "2000萬",
+                "timeline": "5年",
+                "goal_type": "retirement",
+            },
+        )
+
+        updated = node._get_updated_intent_profile(state)
+
+        assert updated.financial_goal is not None
+        assert updated.financial_goal.target_age == 50
+        assert updated.financial_goal.target_amount == "2000萬"
+
+    def test_applies_all_new_fields_from_namespace(self):
+        """Test that all new fields are applied from namespace."""
+        from agent_will_smith.agent.intent_chat.node.response_node import (
+            ResponseNode,
+        )
+        from agent_will_smith.agent.intent_chat.state import (
+            ChatState,
+            ChatInput,
+        )
+        from agent_will_smith.agent.intent_chat.model.namespaces import (
+            ToolExecutionNodeNamespace,
+        )
+
+        node = ResponseNode()
+
+        input_data = ChatInput(
+            message="test",
+            session_id="550e8400-e29b-41d4-a716-446655440000",
+        )
+        state = ChatState(input=input_data)
+
+        state.tool_execution_node = ToolExecutionNodeNamespace(
+            tool_results=[],
+            updated_intent_score=0.85,
+            updated_product_interests=["investment"],
+            updated_life_stage="pre_retirement",
+            updated_risk_preference="aggressive",
+            updated_investment_experience="intermediate",
+            updated_current_assets="1000萬台幣",
+        )
+
+        updated = node._get_updated_intent_profile(state)
+
+        assert updated.life_stage == "pre_retirement"
+        assert updated.risk_preference == "aggressive"
+        assert updated.investment_experience == "intermediate"
+        assert updated.current_assets == "1000萬台幣"

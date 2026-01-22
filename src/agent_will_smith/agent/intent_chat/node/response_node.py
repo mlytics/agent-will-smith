@@ -44,10 +44,14 @@ class ResponseNode:
         # Collect tool call results
         tool_calls = self._collect_tool_results(state)
 
+        # Get intent profile, checking for updates in tool_execution_node namespace
+        # (workaround for LangGraph not properly updating nested Pydantic models)
+        intent_profile = self._get_updated_intent_profile(state)
+
         # Create ChatOutput
         output = ChatOutput(
             response=response_text or "I'm sorry, I couldn't generate a response.",
-            intent_profile=state.intent_profile,
+            intent_profile=intent_profile,
             tool_calls=tool_calls,
             session_id=state.input.session_id,
             is_complete=True,
@@ -57,7 +61,8 @@ class ResponseNode:
             "response node completed",
             response_length=len(output.response),
             num_tool_calls=len(output.tool_calls),
-            intent_score=output.intent_profile.intent_score,
+            intent_score=intent_profile.intent_score,
+            product_interests=intent_profile.product_interests,
         )
 
         return {
@@ -142,8 +147,63 @@ class ResponseNode:
         for tool_result in state.tool_execution_node.tool_results:
             results.append({
                 "tool_call_id": tool_result.tool_call_id,
+                "name": tool_result.name,
                 "result": tool_result.result,
                 "error": tool_result.error,
             })
 
         return results
+
+    def _get_updated_intent_profile(self, state: ChatState):
+        """Get intent profile with any updates from tool_execution_node.
+
+        LangGraph doesn't properly update nested Pydantic models in state,
+        so we check the tool_execution_node namespace for updates.
+
+        Args:
+            state: Current chat state
+
+        Returns:
+            Updated IntentProfile
+        """
+        from agent_will_smith.agent.intent_chat.state import IntentProfile, FinancialGoal
+
+        base_profile = state.intent_profile
+
+        if state.tool_execution_node:
+            ns = state.tool_execution_node
+            has_updates = (
+                ns.updated_intent_score is not None
+                or ns.updated_product_interests is not None
+                or ns.updated_life_stage is not None
+                or ns.updated_risk_preference is not None
+                or ns.updated_investment_experience is not None
+                or ns.updated_current_assets is not None
+                or ns.updated_financial_goal is not None
+            )
+
+            if has_updates:
+                self.logger.info(
+                    "applying intent profile updates from namespace",
+                    original_score=base_profile.intent_score,
+                    updated_score=ns.updated_intent_score,
+                    updated_life_stage=ns.updated_life_stage,
+                )
+
+                # Build financial goal from namespace if present
+                financial_goal = base_profile.financial_goal
+                if ns.updated_financial_goal:
+                    financial_goal = FinancialGoal(**ns.updated_financial_goal)
+
+                return IntentProfile(
+                    life_stage=ns.updated_life_stage if ns.updated_life_stage is not None else base_profile.life_stage,
+                    risk_preference=ns.updated_risk_preference if ns.updated_risk_preference is not None else base_profile.risk_preference,
+                    product_interests=ns.updated_product_interests if ns.updated_product_interests is not None else base_profile.product_interests,
+                    intent_score=ns.updated_intent_score if ns.updated_intent_score is not None else base_profile.intent_score,
+                    signals=base_profile.signals,
+                    financial_goal=financial_goal,
+                    current_assets=ns.updated_current_assets if ns.updated_current_assets is not None else base_profile.current_assets,
+                    investment_experience=ns.updated_investment_experience if ns.updated_investment_experience is not None else base_profile.investment_experience,
+                )
+
+        return base_profile
