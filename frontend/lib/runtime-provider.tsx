@@ -14,6 +14,7 @@ import {
 } from "@assistant-ui/react";
 import { streamMessage, sendMessageSync } from "./chat-api";
 import { useIntentProfile, IntentProfileProvider } from "./intent-profile-context";
+import { ScenarioProvider, useScenario } from "./scenario-context";
 import type { Message, IntentProfile, ContentPart, ToolCallContentPart } from "./types";
 
 // Convert our Message type to ThreadMessageLike format for assistant-ui
@@ -100,6 +101,7 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const { profile, updateProfile, incrementTurnCount } = useIntentProfile();
+  const { selectedScenario } = useScenario();
 
   // Use ref to accumulate tool calls during streaming
   const pendingToolCallsRef = useRef<ToolCallContentPart[]>([]);
@@ -229,7 +231,8 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
               setIsRunning(false);
             },
           },
-          profile  // Pass current intent profile for state persistence
+          profile,  // Pass current intent profile for state persistence
+          { scenario_id: selectedScenario.id }  // Pass scenario context for analytics
         );
       } catch (error) {
         console.error("Chat error:", error);
@@ -269,7 +272,7 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
         setIsRunning(false);
       }
     },
-    [messages, sessionId, updateProfile, profile, incrementTurnCount]
+    [messages, sessionId, updateProfile, profile, incrementTurnCount, selectedScenario]
   );
 
   // Create adapter with convertMessage for custom message format
@@ -289,8 +292,10 @@ function RuntimeProviderInner({ children }: { children: ReactNode }) {
 
 export function RuntimeProvider({ children }: { children: ReactNode }) {
   return (
-    <IntentProfileProvider>
-      <RuntimeProviderInner>{children}</RuntimeProviderInner>
-    </IntentProfileProvider>
+    <ScenarioProvider>
+      <IntentProfileProvider>
+        <RuntimeProviderInner>{children}</RuntimeProviderInner>
+      </IntentProfileProvider>
+    </ScenarioProvider>
   );
 }

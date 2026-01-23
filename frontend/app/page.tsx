@@ -7,6 +7,7 @@
 
 import { Thread } from "@/components/assistant-ui/thread";
 import { IntentProfilePanel } from "@/components/assistant-ui/intent-profile-panel";
+import { ScenarioSelector } from "@/components/assistant-ui/scenario-selector";
 import { RuntimeProvider } from "@/lib/runtime-provider";
 import { useState } from "react";
 import { PanelRightCloseIcon, PanelRightOpenIcon, SparklesIcon } from "lucide-react";
@@ -52,8 +53,13 @@ export default function ChatPage() {
         {/* Main content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Chat area */}
-          <main className="flex-1 overflow-hidden">
-            <Thread />
+          <main className="flex flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 border-b border-border/30 px-4 py-2">
+              <ScenarioSelector />
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <Thread />
+            </div>
           </main>
 
           {/* Intent profile sidebar */}

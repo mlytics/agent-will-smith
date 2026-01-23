@@ -8,7 +8,22 @@ import type {
   IntentProfile,
   QuickQuestion,
   StreamCallbacks,
+  ContentPart,
 } from "./types";
+
+/**
+ * Extract text content from message content (handles string or ContentPart array).
+ */
+function extractTextContent(content: string | ContentPart[]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  // Extract text from content parts, ignore tool-call parts
+  return content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+}
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
@@ -21,11 +36,12 @@ export async function streamMessage(
   sessionId: string,
   conversationHistory: Message[],
   callbacks: StreamCallbacks,
-  intentProfile?: IntentProfile | null
+  intentProfile?: IntentProfile | null,
+  context?: Record<string, string>
 ): Promise<void> {
   const history = conversationHistory.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: extractTextContent(m.content),
   }));
 
   try {
@@ -40,6 +56,7 @@ export async function streamMessage(
         session_id: sessionId,
         conversation_history: history,
         intent_profile: intentProfile || undefined,
+        context: context || undefined,
       }),
     });
 
@@ -113,7 +130,7 @@ export async function sendMessageSync(
 ): Promise<{ response: string; intentProfile: IntentProfile }> {
   const history = conversationHistory.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: extractTextContent(m.content),
   }));
 
   const response = await fetch(`${API_BASE}/api/v1/chat/sync`, {
