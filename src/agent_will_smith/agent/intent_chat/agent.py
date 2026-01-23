@@ -10,6 +10,7 @@ Namespace Architecture:
 """
 
 import asyncio
+import time
 
 import structlog
 from langgraph.graph import StateGraph, START, END
@@ -20,6 +21,7 @@ from agent_will_smith.agent.intent_chat.state import (
     ChatOutput,
 )
 from agent_will_smith.agent.intent_chat.config import Config
+from agent_will_smith.conversation_analytics.logger import ConversationLogger
 from agent_will_smith.core.exceptions import AgentTimeoutError, AgentStateError
 
 
@@ -39,6 +41,7 @@ class Agent:
         tool_execution_node,
         response_node,
         agent_config: Config,
+        conversation_logger: ConversationLogger | None = None,
     ):
         """Initialize agent with injected node instances.
 
@@ -48,9 +51,11 @@ class Agent:
             tool_execution_node: Node for executing tool calls
             response_node: Node for composing final ChatOutput
             agent_config: Agent configuration for metadata and timeouts
+            conversation_logger: Optional logger for conversation analytics
         """
         self.logger = structlog.get_logger(__name__)
         self.agent_config = agent_config
+        self.conversation_logger = conversation_logger
 
         # Store nodes
         self.conversation_node = conversation_node
@@ -127,11 +132,23 @@ class Agent:
             AgentTimeoutError: If execution exceeds timeout
             AgentStateError: If output node fails to produce output
         """
+        start_time = time.time()
+
         self.logger.info(
             "execution started",
             session_id=input_dto.session_id,
             message_length=len(input_dto.message),
         )
+
+        # Ensure session exists if logging enabled
+        if self.conversation_logger:
+            scenario_id = "free_form"
+            if input_dto.context and "scenario_id" in input_dto.context:
+                scenario_id = input_dto.context["scenario_id"]
+            await self.conversation_logger.ensure_session(
+                session_id=input_dto.session_id,
+                scenario_id=scenario_id,
+            )
 
         # Create initial state with input
         initial_state = ChatState(input=input_dto)
@@ -176,5 +193,17 @@ class Agent:
             response_length=len(output.response),
             num_tool_calls=len(output.tool_calls),
         )
+
+        # Log turn if enabled
+        if self.conversation_logger:
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await self.conversation_logger.log_turn(
+                session_id=input_dto.session_id,
+                user_message=input_dto.message,
+                assistant_response=output.response,
+                response_time_ms=response_time_ms,
+                tool_calls=output.tool_calls,
+                intent_profile=output.intent_profile.model_dump(),
+            )
 
         return output

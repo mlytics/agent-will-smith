@@ -13,6 +13,8 @@ from agent_will_smith.agent.intent_chat.node.tool_calling_node import ToolCallin
 from agent_will_smith.agent.intent_chat.node.tool_execution_node import ToolExecutionNode
 from agent_will_smith.agent.intent_chat.node.response_node import ResponseNode
 from agent_will_smith.agent.intent_chat.agent import Agent
+from agent_will_smith.conversation_analytics.database import ConversationDatabase
+from agent_will_smith.conversation_analytics.logger import ConversationLogger
 
 
 class Container(containers.DeclarativeContainer):
@@ -70,6 +72,16 @@ class Container(containers.DeclarativeContainer):
         ResponseNode,
     )
 
+    # Conversation analytics
+    conversation_database: providers.Provider[ConversationDatabase] = providers.Singleton(
+        ConversationDatabase,
+    )
+
+    conversation_logger: providers.Provider[ConversationLogger] = providers.Singleton(
+        ConversationLogger,
+        database=conversation_database,
+    )
+
     # Agent layer - Intent chat agent (Factory for flexibility)
     agent: providers.Provider[Agent] = providers.Factory(
         Agent,
@@ -78,4 +90,5 @@ class Container(containers.DeclarativeContainer):
         tool_execution_node=tool_execution_node,
         response_node=response_node,
         agent_config=agent_config,
+        conversation_logger=conversation_logger,
     )
