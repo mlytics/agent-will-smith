@@ -81,3 +81,13 @@ class Config(BaseAgentConfig):
         ge=1,
         le=300,
     )
+
+    # Analytics Configuration
+    analytics_db_path: str = Field(
+        default="/tmp/conversation_analytics.db",
+        description="Path to SQLite database for conversation analytics",
+    )
+    analytics_enabled: bool = Field(
+        default=True,
+        description="Enable conversation analytics logging",
+    )

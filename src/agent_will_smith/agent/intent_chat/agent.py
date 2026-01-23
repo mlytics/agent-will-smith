@@ -140,15 +140,22 @@ class Agent:
             message_length=len(input_dto.message),
         )
 
-        # Ensure session exists if logging enabled
-        if self.conversation_logger:
-            scenario_id = "free_form"
-            if input_dto.context and "scenario_id" in input_dto.context:
-                scenario_id = input_dto.context["scenario_id"]
-            await self.conversation_logger.ensure_session(
-                session_id=input_dto.session_id,
-                scenario_id=scenario_id,
-            )
+        # Ensure session exists if analytics enabled
+        if self.conversation_logger and self.agent_config.analytics_enabled:
+            try:
+                scenario_id = "free_form"
+                if input_dto.context and "scenario_id" in input_dto.context:
+                    scenario_id = input_dto.context["scenario_id"]
+                await self.conversation_logger.ensure_session(
+                    session_id=input_dto.session_id,
+                    scenario_id=scenario_id,
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "analytics_session_error",
+                    error=str(e),
+                    session_id=input_dto.session_id,
+                )
 
         # Create initial state with input
         initial_state = ChatState(input=input_dto)
@@ -194,16 +201,23 @@ class Agent:
             num_tool_calls=len(output.tool_calls),
         )
 
-        # Log turn if enabled
-        if self.conversation_logger:
-            response_time_ms = int((time.time() - start_time) * 1000)
-            await self.conversation_logger.log_turn(
-                session_id=input_dto.session_id,
-                user_message=input_dto.message,
-                assistant_response=output.response,
-                response_time_ms=response_time_ms,
-                tool_calls=output.tool_calls,
-                intent_profile=output.intent_profile.model_dump(),
-            )
+        # Log turn if analytics enabled
+        if self.conversation_logger and self.agent_config.analytics_enabled:
+            try:
+                response_time_ms = int((time.time() - start_time) * 1000)
+                await self.conversation_logger.log_turn(
+                    session_id=input_dto.session_id,
+                    user_message=input_dto.message,
+                    assistant_response=output.response,
+                    response_time_ms=response_time_ms,
+                    tool_calls=output.tool_calls,
+                    intent_profile=output.intent_profile.model_dump(),
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "analytics_log_turn_error",
+                    error=str(e),
+                    session_id=input_dto.session_id,
+                )
 
         return output

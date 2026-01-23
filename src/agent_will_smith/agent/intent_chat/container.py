@@ -75,6 +75,7 @@ class Container(containers.DeclarativeContainer):
     # Conversation analytics
     conversation_database: providers.Provider[ConversationDatabase] = providers.Singleton(
         ConversationDatabase,
+        db_path=agent_config.provided.analytics_db_path,
     )
 
     conversation_logger: providers.Provider[ConversationLogger] = providers.Singleton(
