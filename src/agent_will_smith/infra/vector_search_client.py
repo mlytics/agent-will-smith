@@ -6,6 +6,7 @@ Provides low-level access to Databricks Vector Search without product-specific a
 
 from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
 import structlog
+import mlflow
 
 from agent_will_smith.core.exceptions import UpstreamError
 
@@ -44,6 +45,7 @@ class VectorSearchClient:
         )
         self.logger.info("vector search client initialized", endpoint=endpoint_name)
 
+    @mlflow.trace(name="databricks_vector_search_api")
     def similarity_search(
         self,
         index_name: str,
