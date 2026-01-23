@@ -84,10 +84,10 @@ def create_app() -> FastAPI:
             mlflow.set_tracking_uri(mlflow_config.tracking_uri)
             logger.info("mlflow tracking uri set", uri=mlflow_config.tracking_uri)
         
-        # Set experiment explicitly (supports both IDs and paths like /Users/name/exp)
+        # Set experiment by numeric ID
         if mlflow_config.experiment_id:
-            mlflow.set_experiment(mlflow_config.experiment_id)
-            logger.info("mlflow experiment set", experiment=mlflow_config.experiment_id)
+            mlflow.set_experiment(experiment_id=mlflow_config.experiment_id)
+            logger.info("mlflow experiment set", experiment_id=mlflow_config.experiment_id)
         
         # Enable autolog for LangChain (automatically traces LLM calls)
         mlflow.langchain.autolog()

@@ -24,10 +24,9 @@ class MLFlowConfig(BaseSettings):
 
     @model_validator(mode="after")
     def check_tracking_config(self) -> "MLFlowConfig":
-        """Validate that tracking URI or experiment ID is provided if tracing is enabled."""
-        if self.enable_tracing and not (self.tracking_uri or self.experiment_id):
+        """Validate that tracking URI and experiment ID are provided if tracing is enabled."""
+        if self.enable_tracing and not (self.tracking_uri and self.experiment_id):
             raise ValueError(
-                "Enable tracing requires at least tracking_uri or experiment_id. "
-                "Set CORE_MLFLOW_TRACKING_URI=databricks and CORE_MLFLOW_EXPERIMENT_ID=/path/to/experiment"
+                "Enable tracing requires both tracking_uri and experiment_id"
             )
         return self
