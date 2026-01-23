@@ -79,6 +79,17 @@ def create_app() -> FastAPI:
 
     # 3. MLflow
     if mlflow_config.enable_tracing:
+        # Set tracking URI explicitly (more reliable than env vars alone)
+        if mlflow_config.tracking_uri:
+            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+            logger.info("mlflow tracking uri set", uri=mlflow_config.tracking_uri)
+        
+        # Set experiment explicitly (supports both IDs and paths like /Users/name/exp)
+        if mlflow_config.experiment_id:
+            mlflow.set_experiment(mlflow_config.experiment_id)
+            logger.info("mlflow experiment set", experiment=mlflow_config.experiment_id)
+        
+        # Enable autolog for LangChain (automatically traces LLM calls)
         mlflow.langchain.autolog()
         logger.info("mlflow tracing enabled")
 

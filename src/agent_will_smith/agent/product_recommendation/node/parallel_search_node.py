@@ -2,6 +2,7 @@
 
 import asyncio
 import structlog
+import mlflow
 from typing import Optional, Literal
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
@@ -86,6 +87,7 @@ class ParallelSearchNode:
 
         return vertical_results, errors, status
 
+    @mlflow.trace(name="parallel_search_node")
     async def __call__(self, state: AgentState) -> dict:
         """Execute parallel vector searches for all requested verticals.
         
@@ -151,6 +153,7 @@ class ParallelSearchNode:
             )
         }
 
+    @mlflow.trace(name="search_vertical")
     async def _search_vertical(
         self,
         vertical: Vertical,

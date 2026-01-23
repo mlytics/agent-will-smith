@@ -11,6 +11,7 @@ Uses injected ProductRegistry for configuration.
 
 from pydantic import ValidationError
 import structlog
+import mlflow
 
 from agent_will_smith.infra.vector_search_client import VectorSearchClient
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
@@ -46,6 +47,7 @@ class ProductVectorRepository:
         self.registry = registry
         self.logger = structlog.get_logger(__name__)
 
+    @mlflow.trace(name="vector_search")
     def search(
         self,
         vertical: Vertical,
