@@ -73,3 +73,4 @@ dmypy.json
 # Distribution / Packaging
 *.whl
 
+conversation_analytics.db
