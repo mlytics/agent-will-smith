@@ -36,13 +36,10 @@ def validate_semver_with_v_prefix(version: str, field_name: str = "semantic vers
         >>> validate_semver_with_v_prefix("invalid", "agent version")
         ValueError: Invalid agent version: invalid
     """
-    # Strip "v" prefix if present (team convention for versioning)
-    clean_version = version.lstrip("v")
-    
-    if not Version.is_valid(clean_version):
+    if not Version.is_valid(version.lstrip("v")):
         raise ValueError(f"Invalid {field_name}: {version}")
     
-    return clean_version
+    return version
 
 
 # Reusable type annotation for semantic version fields
