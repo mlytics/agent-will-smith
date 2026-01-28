@@ -17,7 +17,10 @@ dependencies = [
     
     # MLFlow
     "mlflow>=3.8.1",
-    
+
+    # Embedding
+    "google-genai>=1.60.0",
+
     # Schema & Validation
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",

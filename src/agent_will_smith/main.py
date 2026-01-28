@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     mlflow_config = _core_container.mlflow_config()
     log_config = _core_container.log_config()
     databricks_config = _core_container.databricks_config()
+    gemini_config = _core_container.gemini_config()
 
     # 2. Logging
     configure_logging(log_config)
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
         mlflow_config=mlflow_config,
         log_config=log_config,
         databricks_config=databricks_config,
+        gemini_config=gemini_config,
     )
 
     # 3. MLflow
