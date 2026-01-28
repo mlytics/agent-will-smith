@@ -97,16 +97,16 @@ class ParallelSearchNode:
         if state.intent_node is None:
             raise ValueError("intent_node must be set before search_node")
 
-        verticals = state.input.verticals
-        k = state.input.k
-        customer_uuid = state.input.customer_uuid
-        article = state.input.article
-        question = state.input.question
+        agent_input = state.input
+        verticals = agent_input.verticals
+        k = agent_input.k
+        article = agent_input.article
+        question = agent_input.question
         intent = state.intent_node.intent
 
         self.logger.info(
             "parallel search started",
-            verticals=verticals,
+            verticals=agent_input.verticals,
             k=k,
             has_intent=bool(intent),
         )
@@ -124,7 +124,7 @@ class ParallelSearchNode:
                 vertical=v,
                 query=query,
                 k=k,
-                customer_uuid=customer_uuid,
+                customer_uuids=agent_input.get_customer_uuids(v),
             )
             for v in verticals
         ]
@@ -159,11 +159,11 @@ class ParallelSearchNode:
         vertical: Vertical,
         query: str,
         k: int,
-        customer_uuid: Optional[str] = None,
+        customer_uuids: list[str],
         timeout: Optional[float] = None,
     ) -> list[ProductResult]:
         """Search a single vertical with timeout.
-        
+
         Now uses the generic repository.search() method.
         No more method mapping dictionary needed!
         """
@@ -179,7 +179,7 @@ class ParallelSearchNode:
                 vertical=vertical,
                 query=query,
                 max_results=k,
-                customer_uuid=customer_uuid,
+                customer_uuids=customer_uuids,
             ),
             timeout=timeout,
         )

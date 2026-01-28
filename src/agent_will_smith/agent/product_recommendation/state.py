@@ -14,15 +14,23 @@ from agent_will_smith.agent.product_recommendation.model.namespaces import (
 
 class AgentInput(BaseModel):
     """Input DTO for agent invocation and state namespace.
-    
+
     Note: Validation is handled at the API boundary (RecommendProductsRequest).
     This DTO trusts that inputs are already validated.
     """
     article: str = Field(..., description="Original article text to analyze for product recommendations")
     question: str = Field(..., description="User question guiding the recommendation intent")
     k: int = Field(..., description="Number of products to return per vertical")
-    verticals: list[Vertical] = Field(..., description="Product verticals to search (activities, books, articles)")
-    customer_uuid: Optional[str] = Field(None, description="Customer UUID for multi-tenant data isolation")
+    product_types: dict[Vertical, list[str]] = Field(..., description="Product verticals to search with customer UUIDs per vertical")
+
+    @property
+    def verticals(self) -> list[Vertical]:
+        """Get list of verticals to search."""
+        return list(self.product_types.keys())
+
+    def get_customer_uuids(self, vertical: Vertical) -> list[str]:
+        """Get customer UUIDs for a specific vertical."""
+        return self.product_types.get(vertical, [])
 
 
 class AgentOutput(BaseModel):

@@ -104,7 +104,6 @@ class Agent:
             question_length=len(input_dto.question),
             verticals=input_dto.verticals,
             k=input_dto.k,
-            customer_uuid=input_dto.customer_uuid,
         )
 
         # Create initial state with input namespace (singular!)

@@ -6,10 +6,11 @@ All API boundaries use Pydantic models for validation and documentation.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product import ProductMetadata
+from agent_will_smith.core.exceptions import BadRequestError
 
 
 class RecommendProductsRequest(BaseModel):
@@ -36,17 +37,31 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[Vertical] = Field(
+    product_types: dict[Vertical, list[str]] = Field(
         ...,
-        description="Product types to search (e.g., ['activities'], ['books'], or multiple)",
-        examples=[["activities"], ["activities", "books"]],
-        min_length=1,
+        description="Product types to search with customer UUIDs per vertical",
+        examples=[{
+            "articles": ["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
+            "books": ["738c9f0b-d795-4520-979a-2b6dddc1c5a4"],
+            "activities": ["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
+        }],
     )
-    customer_uuid: str = Field(
-        ...,
-        description="Customer UUID for multi-tenant data isolation",
-        examples=["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
-    )
+
+    @model_validator(mode="after")
+    def validate_product_types(self) -> "RecommendProductsRequest":
+        """Validate each vertical has at least one customer UUID."""
+        if not self.product_types:
+            raise BadRequestError(
+                "product_types must contain at least one vertical",
+                details={"field": "product_types"},
+            )
+        for vertical, uuids in self.product_types.items():
+            if not uuids:
+                raise BadRequestError(
+                    f"product_types[{vertical.value}] must contain at least one customer UUID",
+                    details={"field": "product_types", "vertical": vertical.value},
+                )
+        return self
 
 
 class ProductRecommendation(BaseModel):

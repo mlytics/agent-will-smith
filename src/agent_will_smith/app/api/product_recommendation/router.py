@@ -61,23 +61,21 @@ async def recommend_products_endpoint(
     logger = structlog.get_logger(__name__)
     trace_id = getattr(request.state, "trace_id", "unknown")
 
-    logger.info(
-        "recommend products request",
-        trace_id=trace_id,
-        article_length=len(body.article),
-        question_length=len(body.question),
-        k=body.k,
-        product_types=body.product_types,
-        customer_uuid=body.customer_uuid,
-    )
-
     # Create AgentInput DTO from request body
     input_dto = AgentInput(
         article=body.article,
         question=body.question,
         k=body.k,
-        verticals=body.product_types,
-        customer_uuid=body.customer_uuid,
+        product_types=body.product_types,
+    )
+
+    logger.info(
+        "recommend products request",
+        trace_id=trace_id,
+        article_length=len(input_dto.article),
+        question_length=len(input_dto.question),
+        k=input_dto.k,
+        verticals=input_dto.verticals,
     )
 
     # Invoke agent with DTO - returns AgentOutput DTO
@@ -85,7 +83,7 @@ async def recommend_products_endpoint(
     agent_output = await agent.invoke(input_dto)
 
     # Transform grouped results to API response format
-    verticals_searched = body.product_types
+    verticals_searched = input_dto.verticals
 
     results_by_vertical = []
     for vertical in verticals_searched:

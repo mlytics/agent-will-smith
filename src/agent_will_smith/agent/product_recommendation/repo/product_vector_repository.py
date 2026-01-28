@@ -53,28 +53,32 @@ class ProductVectorRepository:
         vertical: Vertical,
         query: str,
         max_results: int,
-        customer_uuid: str | None = None,
+        customer_uuids: list[str] | None = None,
     ) -> list[ProductResult]:
         """Search a product vertical with product-specific logic.
-        
+
         Generic method that works for all product types using the registry.
-        
+
         Args:
             vertical: Product vertical to search ("activities", "books", "articles")
             query: Search query text
             max_results: Maximum number of results
-            customer_uuid: Optional customer UUID for filtering
-            
+            customer_uuids: Customer UUIDs for filtering (OR logic - matches any)
+
         Returns:
             List of ProductResult objects
         """
         index_name = self.registry.get_index_name(vertical)
         columns = self.registry.get_columns(vertical)
 
-        # Build filters for multi-tenant isolation
+        # Build filters: multi-tenant + vertical-specific availability
         filters = {}
-        if customer_uuid:
-            filters["customer_uuid"] = customer_uuid
+        if customer_uuids:
+            # List value = OR/IN clause (matches any UUID in the list)
+            filters["customer_uuid"] = customer_uuids
+        availability_filter = vertical.get_availability_filter()
+        if availability_filter:
+            filters.update(availability_filter)
 
         # Call generic client
         raw_results = self.vector_client.similarity_search(

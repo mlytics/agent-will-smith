@@ -122,7 +122,7 @@ class VectorSearchClient:
         query_text: str,
         columns: list[str],
         num_results: int,
-        filters: dict[str, str] | None = None,
+        filters: dict | str | None = None,
     ) -> dict:
         """Execute similarity search and return raw results.
 
@@ -136,7 +136,7 @@ class VectorSearchClient:
             query_text: Query text for similarity search
             columns: List of column names to retrieve
             num_results: Maximum number of results
-            filters: Optional filters (e.g., {"customer_uuid": "..."})
+            filters: Optional filters - dict for equality or string for SQL-like expressions
 
         Returns:
             Raw dict response from Databricks Vector Search API
