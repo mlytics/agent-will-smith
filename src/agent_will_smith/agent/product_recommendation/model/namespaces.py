@@ -7,11 +7,13 @@ from agent_will_smith.agent.product_recommendation.model.product import ProductR
 
 
 class IntentNodeNamespace(BaseModel):
-    """State namespace for intent analysis node.
-    
-    Note: Internal state populated by LLM - trusted output.
-    """
-    intent: str = Field(..., description="LLM-generated intent analysis describing user's goals and article themes")
+    """State namespace for intent analysis node."""
+    intent: str = Field(
+        ...,
+        description="LLM-generated intent analysis describing user's goals and article themes",
+        min_length=10,
+        max_length=1000,
+    )
 
 
 class SearchNodeNamespace(BaseModel):

@@ -64,5 +64,5 @@ class ProductResult(BaseModel):
     vertical: Vertical = Field(..., description="Product vertical (activities, books, or articles)")
     title: str = Field(..., description="Product title")
     description: str | None = Field(None, description="Product description or summary")
-    relevance_score: float = Field(..., description="Vector search relevance score (higher is more similar)")
+    relevance_score: float = Field(..., description="Vector search relevance score (0.0-1.0)", ge=0.0, le=1.0)
     metadata: ProductMetadata = Field(..., description="Product-specific metadata (typed per vertical)")

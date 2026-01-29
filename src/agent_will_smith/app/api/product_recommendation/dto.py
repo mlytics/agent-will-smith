@@ -18,7 +18,7 @@ class RecommendProductsRequest(BaseModel):
     article: str = Field(
         ...,
         description="Original article text to analyze",
-        min_length=0,
+        min_length=10,
         max_length=50000,
         examples=["This article discusses sustainable living and eco-friendly products..."],
     )
@@ -68,7 +68,7 @@ class ProductRecommendation(BaseModel):
     )
     title: str = Field(..., description="Product title")
     description: str | None = Field(None, description="Product description")
-    relevance_score: float = Field(..., description="Relevance score (higher is more similar)")
+    relevance_score: float = Field(..., description="Relevance score (0.0-1.0)", ge=0.0, le=1.0)
     metadata: ProductMetadata = Field(
         ..., description="Product-specific metadata (typed per vertical)"
     )
