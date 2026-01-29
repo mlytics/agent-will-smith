@@ -5,9 +5,10 @@ agent-specific configuration classes. It centralizes common fields like agent
 identity and prompt caching configuration.
 """
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings
-from semver import Version
+
+from agent_will_smith.core.config.validators import SemVer
 
 class BaseAgentConfig(BaseSettings):
     """Base configuration with common agent metadata.
@@ -21,7 +22,7 @@ class BaseAgentConfig(BaseSettings):
 
     # Agent Identity
     agent_name: str = Field(..., description="Agent identifier")
-    agent_version: str = Field(..., description="Agent version")
+    agent_version: SemVer = Field(..., description="Agent version")
 
     # Prompt Cache Configuration (shared across all prompts in the agent)
     prompt_cache_ttl: int = Field(
@@ -29,10 +30,3 @@ class BaseAgentConfig(BaseSettings):
         description="Prompt cache TTL in seconds for all prompts",
         gt=0
     )
-
-    @field_validator("agent_version", mode="after")
-    @classmethod
-    def agent_version_is_valid(cls, v):
-        if not Version.is_valid(v):
-            raise ValueError(f"Invalid agent version: {v}")
-        return v

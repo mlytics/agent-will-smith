@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     mlflow_config = _core_container.mlflow_config()
     log_config = _core_container.log_config()
     databricks_config = _core_container.databricks_config()
+    gemini_config = _core_container.gemini_config()
 
     # 2. Logging
     configure_logging(log_config)
@@ -75,10 +76,22 @@ def create_app() -> FastAPI:
         mlflow_config=mlflow_config,
         log_config=log_config,
         databricks_config=databricks_config,
+        gemini_config=gemini_config,
     )
 
     # 3. MLflow
     if mlflow_config.enable_tracing:
+        # Set tracking URI explicitly (more reliable than env vars alone)
+        if mlflow_config.tracking_uri:
+            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+            logger.info("mlflow tracking uri set", uri=mlflow_config.tracking_uri)
+        
+        # Set experiment by numeric ID
+        if mlflow_config.experiment_id:
+            mlflow.set_experiment(experiment_id=mlflow_config.experiment_id)
+            logger.info("mlflow experiment set", experiment_id=mlflow_config.experiment_id)
+        
+        # Enable autolog for LangChain (automatically traces LLM calls)
         mlflow.langchain.autolog()
         logger.info("mlflow tracing enabled")
 

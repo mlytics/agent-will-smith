@@ -1,6 +1,7 @@
 """Output node that creates AgentOutput DTO."""
 
 import structlog
+import mlflow
 
 from agent_will_smith.agent.product_recommendation.state import AgentState, AgentOutput
 from agent_will_smith.agent.product_recommendation.model.product import ProductResult
@@ -14,6 +15,7 @@ class OutputNode:
     def __init__(self):
         self.logger = structlog.get_logger(__name__)
 
+    @mlflow.trace(name="output_node")
     def __call__(self, state: AgentState) -> dict:
         """Create AgentOutput DTO from state namespaces.
         

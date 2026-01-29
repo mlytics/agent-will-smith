@@ -17,7 +17,7 @@ class DatabricksConfig(BaseSettings):
     host: str = Field(..., description="Databricks workspace URL")
     client_id: Optional[str] = Field(None, description="Databricks OAuth client ID")
     client_secret: Optional[str] = Field(
-        None, description="Databricks OAuth client secret"
+        None, description="Databricks OAuth client secret", repr=False
     )
     config_profile: Optional[str] = Field(None, description="Databricks config profile")
 

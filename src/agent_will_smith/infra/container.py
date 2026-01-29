@@ -32,6 +32,9 @@ class Container(containers.DeclarativeContainer):
         workspace_url=core_container.databricks_config.provided.host,
         client_id=core_container.databricks_config.provided.client_id,
         client_secret=core_container.databricks_config.provided.client_secret,
+        gemini_api_key=core_container.gemini_config.provided.api_key,
+        gemini_embedding_model=core_container.gemini_config.provided.embedding_model,
+        gemini_embedding_dimension=core_container.gemini_config.provided.embedding_dimension,
         # endpoint_name provided by agent container
     )
 

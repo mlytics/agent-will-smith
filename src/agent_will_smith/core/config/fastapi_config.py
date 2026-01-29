@@ -1,6 +1,7 @@
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from semver import Version
+
+from agent_will_smith.core.config.validators import SemVer
 
 class FastAPIConfig(BaseSettings):
     """FastAPI server and application configuration."""
@@ -13,19 +14,11 @@ class FastAPIConfig(BaseSettings):
     )
 
     app_name: str = Field(default="agent-will-smith", description="Application name")
-    app_version: str = Field(..., description="Application version")
+    app_version: SemVer = Field(..., description="Application version")
     enable_docs: bool = Field(default=False, description="Enable API documentation")
     port: int = Field(default=8000, description="API port")
     api_key: str = Field(
         ...,
         description="API key for Bearer token authentication",
     )
-
-
-    @field_validator("app_version", mode="after")
-    @classmethod
-    def app_version_is_valid(cls, v):
-        if not Version.is_valid(v):
-            raise ValueError(f"Invalid application version: {v}")
-        return v
 
