@@ -28,6 +28,9 @@ COPY --from=builder /build/.venv /app/.venv
 # Copy application code
 COPY src/ ./src/
 
+# Copy prompts for fallback
+COPY prompts/ ./prompts/
+
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app

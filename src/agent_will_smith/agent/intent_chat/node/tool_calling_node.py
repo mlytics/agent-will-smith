@@ -180,9 +180,23 @@ class ToolCallingNode:
 
     def _build_intent_context(self, state: ChatState) -> str:
         """Build context string from intent profile for LLM."""
+        from datetime import datetime, timezone, timedelta
+
         profile = state.intent_profile
 
-        context_parts = ["## Current User Profile"]
+        # Add current date/time context (Taiwan timezone UTC+8)
+        taiwan_tz = timezone(timedelta(hours=8))
+        now = datetime.now(taiwan_tz)
+        date_str = now.strftime("%Y年%m月%d日 %H:%M")
+        weekday_names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        weekday = weekday_names[now.weekday()]
+
+        context_parts = [
+            f"## Current Date/Time",
+            f"- 現在時間: {date_str} ({weekday})",
+            "",
+            "## Current User Profile",
+        ]
 
         if profile.life_stage:
             context_parts.append(f"- Life Stage: {profile.life_stage}")

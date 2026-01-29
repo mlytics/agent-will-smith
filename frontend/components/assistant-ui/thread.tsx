@@ -12,6 +12,7 @@ import {
 } from "@/components/assistant-ui/attachment";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+import { ProductRecommendationTool } from "@/components/assistant-ui/recommendations";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -135,6 +136,7 @@ const categoryIcons: Record<string, typeof TrendingUpIcon> = {
   investment: TrendingUpIcon,
   retirement: WalletIcon,
   planning: SparklesIcon,
+  risk: TrendingUpIcon,
 };
 
 const ThreadSuggestions: FC = () => {
@@ -147,26 +149,27 @@ const ThreadSuggestions: FC = () => {
   };
 
   // Fallback suggestions if API fails or is loading
+  // These are phrased from the USER's perspective (what they would say/ask)
   const fallbackSuggestions = [
     {
       id: "1",
-      text: "I'm planning for retirement and want to understand my options",
+      text: "我想了解退休規劃，有什麼建議？",
       category: "retirement",
     },
     {
       id: "2",
-      text: "What investment strategies suit my risk tolerance?",
+      text: "幫我推薦適合的投資理財產品",
       category: "investment",
     },
     {
       id: "3",
-      text: "How should I start building my financial portfolio?",
-      category: "planning",
+      text: "我想評估自己的風險承受度",
+      category: "risk",
     },
     {
       id: "4",
-      text: "I want to learn about different savings products",
-      category: "investment",
+      text: "我想開始規劃我的財務目標",
+      category: "planning",
     },
   ];
 
@@ -303,7 +306,12 @@ const AssistantMessage: FC = () => {
             <MessagePrimitive.Parts
               components={{
                 Text: MarkdownText,
-                tools: { Fallback: ToolFallback },
+                tools: {
+                  by_name: {
+                    product_recommendation: ProductRecommendationTool,
+                  },
+                  Fallback: ToolFallback,
+                },
               }}
             />
             <MessageError />
