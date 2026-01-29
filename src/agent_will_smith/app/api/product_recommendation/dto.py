@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product import ProductMetadata
-from agent_will_smith.core.exceptions import BadRequestError
 
 
 class RecommendProductsRequest(BaseModel):
@@ -51,15 +50,11 @@ class RecommendProductsRequest(BaseModel):
     def validate_product_types(self) -> "RecommendProductsRequest":
         """Validate each vertical has at least one customer UUID."""
         if not self.product_types:
-            raise BadRequestError(
-                "product_types must contain at least one vertical",
-                details={"field": "product_types"},
-            )
+            raise ValueError("product_types must contain at least one vertical")
         for vertical, uuids in self.product_types.items():
             if not uuids:
-                raise BadRequestError(
-                    f"product_types[{vertical.value}] must contain at least one customer UUID",
-                    details={"field": "product_types", "vertical": vertical.value},
+                raise ValueError(
+                    f"product_types[{vertical.value}] must contain at least one customer UUID"
                 )
         return self
 

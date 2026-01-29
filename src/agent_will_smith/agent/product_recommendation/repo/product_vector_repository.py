@@ -76,7 +76,8 @@ class ProductVectorRepository:
         if customer_uuids:
             # List value = OR/IN clause (matches any UUID in the list)
             filters["customer_uuid"] = customer_uuids
-        availability_filter = vertical.get_availability_filter()
+            
+        availability_filter = self.registry.get_availability_filter(vertical)
         if availability_filter:
             filters.update(availability_filter)
 

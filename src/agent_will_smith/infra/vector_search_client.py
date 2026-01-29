@@ -4,15 +4,16 @@ Injectable client class for vector similarity search with dependency injection s
 Provides low-level access to Databricks Vector Search without product-specific assumptions.
 """
 
-import math
+from typing import TYPE_CHECKING
 
 from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
-from google import genai
-from google.genai import types
 import structlog
 import mlflow
 
 from agent_will_smith.core.exceptions import UpstreamError
+
+if TYPE_CHECKING:
+    from agent_will_smith.infra.embedding_client import EmbeddingClient
 
 
 class VectorSearchClient:
@@ -30,9 +31,7 @@ class VectorSearchClient:
         client_id: str,
         client_secret: str,
         endpoint_name: str,
-        gemini_api_key: str,
-        gemini_embedding_model: str,
-        gemini_embedding_dimension: int,
+        embedding_client: "EmbeddingClient",
     ):
         """Initialize vector search client with configuration.
 
@@ -41,13 +40,10 @@ class VectorSearchClient:
             client_id: Service principal client ID
             client_secret: Service principal client secret
             endpoint_name: Vector search endpoint name
-            gemini_api_key: Gemini API key for embeddings
-            gemini_embedding_model: Gemini embedding model name
-            gemini_embedding_dimension: Output dimension for embeddings
+            embedding_client: Client for generating text embeddings
         """
         self.endpoint_name = endpoint_name
-        self._gemini_embedding_model = gemini_embedding_model
-        self._gemini_embedding_dimension = gemini_embedding_dimension
+        self._embedding_client = embedding_client
         self.logger = structlog.get_logger(__name__)
         self._client = DatabricksVectorSearchClient(
             workspace_url=workspace_url,
@@ -55,65 +51,7 @@ class VectorSearchClient:
             service_principal_client_secret=client_secret,
             disable_notice=True,
         )
-        self._gemini_client = genai.Client(api_key=gemini_api_key)
-        self.logger.info(
-            "vector search client initialized",
-            endpoint=endpoint_name,
-            embedding_model=gemini_embedding_model,
-            embedding_dimension=gemini_embedding_dimension,
-        )
-
-    def _normalize(self, vector: list[float]) -> list[float]:
-        """L2 normalize a vector.
-
-        Required when using reduced dimensionality embeddings per Gemini docs.
-        """
-        magnitude = math.sqrt(sum(x * x for x in vector))
-        if magnitude == 0:
-            return vector
-        return [x / magnitude for x in vector]
-
-    @mlflow.trace(name="gemini_embed_content")
-    def _embed_query(self, query_text: str) -> list[float]:
-        """Embed query text using Gemini.
-
-        Args:
-            query_text: Text to embed
-
-        Returns:
-            Normalized embedding vector as list of floats
-
-        Raises:
-            UpstreamError: If embedding fails
-        """
-        try:
-            response = self._gemini_client.models.embed_content(
-                model=self._gemini_embedding_model,
-                contents=query_text,
-                config=types.EmbedContentConfig(
-                    task_type="SEMANTIC_SIMILARITY",
-                    output_dimensionality=self._gemini_embedding_dimension,
-                ),
-            )
-            return self._normalize(response.embeddings[0].values)
-        except Exception as e:
-            self.logger.error(
-                "gemini embedding failed",
-                error_type=type(e).__name__,
-                error=str(e),
-                exc_info=e,
-            )
-            raise UpstreamError(
-                f"Gemini embedding failed: {type(e).__name__}: {str(e)}",
-                details={
-                    "provider": "gemini",
-                    "operation": "embed_content",
-                    "model": self._gemini_embedding_model,
-                    "dimension": self._gemini_embedding_dimension,
-                    "error_type": type(e).__name__,
-                    "error": str(e),
-                }
-            ) from e
+        self.logger.info("vector search client initialized", endpoint=endpoint_name)
 
     @mlflow.trace(name="databricks_vector_search_api")
     def similarity_search(
@@ -155,8 +93,8 @@ class VectorSearchClient:
         )
 
         try:
-            # Embed query text using Gemini
-            query_vector = self._embed_query(query_text)
+            # Embed query text using embedding client
+            query_vector = self._embedding_client.embed_text(query_text)
 
             # Get vector search index
             index = self._client.get_index(

@@ -50,9 +50,14 @@ class Container(containers.DeclarativeContainer):
         max_tokens=agent_config.provided.llm_max_tokens,
     )
 
+    embedding_client = providers.Singleton(
+        infra_container.embedding_client,
+    )
+
     vector_search_client = providers.Singleton(
         infra_container.vector_search_client,
         endpoint_name=agent_config.provided.vector_search_endpoint,
+        embedding_client=embedding_client,
     )
 
     prompt_client = providers.Factory(
