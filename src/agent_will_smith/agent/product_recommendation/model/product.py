@@ -7,40 +7,39 @@ from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 # =============================================================================
 # Typed Metadata Classes (one per product vertical)
-# Note: Internal models created from validated repo DTOs - trusted data.
 # =============================================================================
 
 class ActivityMetadata(BaseModel):
     """Activity-specific metadata fields (explicit, type-safe)."""
-    category: str | None = Field(None, description="Activity category")
-    organizer: str | None = Field(None, description="Event organizer name")
-    location_name: str | None = Field(None, description="Venue or location name")
-    location_address: str | None = Field(None, description="Full address")
-    start_time: str | None = Field(None, description="Activity start time (ISO 8601)")
-    end_time: str | None = Field(None, description="Activity end time (ISO 8601)")
-    permalink_url: str | None = Field(None, description="URL to activity details")
+    category: str | None = Field(None, description="Activity category", examples=["environment", "education"])
+    organizer: str | None = Field(None, description="Event organizer name", examples=["EcoLife Foundation"])
+    location_name: str | None = Field(None, description="Venue or location name", examples=["Green Community Center"])
+    location_address: str | None = Field(None, description="Full address", examples=["123 Eco St, San Francisco, CA"])
+    start_time: str | None = Field(None, description="Activity start time (ISO 8601)", examples=["2024-03-15T10:00:00Z"])
+    end_time: str | None = Field(None, description="Activity end time (ISO 8601)", examples=["2024-03-15T12:00:00Z"])
+    permalink_url: str | None = Field(None, description="URL to activity details", examples=["https://example.com/activities/123"])
     cover_image_urls: list[str] = Field(default_factory=list, description="List of cover image URLs")
 
 
 class BookMetadata(BaseModel):
     """Book-specific metadata fields (explicit, type-safe)."""
-    title_subtitle: str | None = Field(None, description="Book subtitle")
-    authors: list[str] = Field(default_factory=list, description="List of author names")
-    categories: list[str] = Field(default_factory=list, description="Book categories/genres")
-    permalink_url: str | None = Field(None, description="URL to book details")
-    cover_image_url: str | None = Field(None, description="Cover image URL")
-    prices: list[str] = Field(default_factory=list, description="List of prices")
+    title_subtitle: str | None = Field(None, description="Book subtitle", examples=["A Guide to Eco-Friendly Living"])
+    authors: list[str] = Field(default_factory=list, description="List of author names", examples=[["Jane Smith", "John Doe"]])
+    categories: list[str] = Field(default_factory=list, description="Book categories/genres", examples=[["Environment", "Lifestyle"]])
+    permalink_url: str | None = Field(None, description="URL to book details", examples=["https://example.com/books/123"])
+    cover_image_url: str | None = Field(None, description="Cover image URL", examples=["https://example.com/covers/book-123.jpg"])
+    prices: list[str] = Field(default_factory=list, description="List of prices", examples=[["$19.99", "$9.99 (ebook)"]])
 
 
 class ArticleMetadata(BaseModel):
     """Article-specific metadata fields (explicit, type-safe)."""
-    authors: list[str] = Field(default_factory=list, description="List of article authors")
-    keywords: list[str] = Field(default_factory=list, description="Article keywords/tags")
-    categories: list[str] = Field(default_factory=list, description="Article categories")
-    permalink_url: str | None = Field(None, description="URL to article")
-    thumbnail_url: str | None = Field(None, description="Thumbnail image URL")
-    main_image_url: str | None = Field(None, description="Main article image URL")
-    publish_time: str | None = Field(None, description="Article publish time (ISO 8601)")
+    authors: list[str] = Field(default_factory=list, description="List of article authors", examples=[["Sarah Green"]])
+    keywords: list[str] = Field(default_factory=list, description="Article keywords/tags", examples=[["sustainability", "eco-friendly"]])
+    categories: list[str] = Field(default_factory=list, description="Article categories", examples=[["Environment", "Lifestyle"]])
+    permalink_url: str | None = Field(None, description="URL to article", examples=["https://example.com/articles/123"])
+    thumbnail_url: str | None = Field(None, description="Thumbnail image URL", examples=["https://example.com/thumbs/article-123.jpg"])
+    main_image_url: str | None = Field(None, description="Main article image URL", examples=["https://example.com/images/article-123.jpg"])
+    publish_time: str | None = Field(None, description="Article publish time (ISO 8601)", examples=["2024-01-15T08:00:00Z"])
 
 
 # Type alias for metadata union
@@ -53,16 +52,14 @@ ProductMetadata = ActivityMetadata | BookMetadata | ArticleMetadata
 
 class ProductResult(BaseModel):
     """Domain model for product search results.
-    
+
     Created by repository layer to provide unified interface
     across different product types (activities, books, articles).
     Metadata is typed per vertical for type safety and explicitness.
-    
-    Note: Created internally from validated repo DTOs - trusted data.
     """
-    product_id: str = Field(..., description="Unique identifier for the product")
-    vertical: Vertical = Field(..., description="Product vertical (activities, books, or articles)")
-    title: str = Field(..., description="Product title")
-    description: str | None = Field(None, description="Product description or summary")
-    relevance_score: float = Field(..., description="Vector search relevance score (0.0-1.0)", ge=0.0, le=1.0)
+    product_id: str = Field(..., description="Unique identifier for the product", examples=["act-123", "book-456", "article-789"])
+    vertical: Vertical = Field(..., description="Product vertical (activities, books, or articles)", examples=["activities"])
+    title: str = Field(..., description="Product title", examples=["Sustainable Living Workshop"])
+    description: str | None = Field(None, description="Product description or summary", examples=["Learn practical skills for sustainable living in this hands-on workshop..."])
+    relevance_score: float = Field(..., description="Vector search relevance score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.87])
     metadata: ProductMetadata = Field(..., description="Product-specific metadata (typed per vertical)")
