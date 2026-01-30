@@ -1,4 +1,4 @@
-.PHONY: help docker-login docker-build docker-tag docker-push docker-push-all clean
+.PHONY: help test docker-login docker-build docker-tag docker-push docker-push-all clean
 
 # Variables
 AWS_REGION := ap-northeast-1
@@ -16,6 +16,13 @@ help: ## Show this help message
 	@echo ''
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+test: ## Run tests with coverage
+	uv run pytest tests/ -v --cov=agent_will_smith --cov-report=term-missing --cov-report=html
 
 docker-login: ## Login to AWS ECR
 	@echo "Setting AWS profile to $(AWS_PROFILE)..."
