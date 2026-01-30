@@ -59,43 +59,31 @@ class TestRecommendProductsRequest:
             )
         assert "must contain at least one customer UUID" in str(exc_info.value)
 
-    def test_article_empty_raises_error(
+    def test_article_empty_valid(
         self, valid_question: str, valid_product_types: dict
     ):
-        """Empty article should raise ValidationError (min_length=10)."""
-        with pytest.raises(ValidationError) as exc_info:
-            RecommendProductsRequest(
-                article="",
-                question=valid_question,
-                k=5,
-                product_types=valid_product_types,
-            )
-        assert "article" in str(exc_info.value).lower()
-
-    def test_article_9_chars_raises_error(
-        self, valid_question: str, valid_product_types: dict
-    ):
-        """Article with 9 characters should raise ValidationError (boundary: just under min)."""
-        with pytest.raises(ValidationError) as exc_info:
-            RecommendProductsRequest(
-                article="123456789",  # 9 chars
-                question=valid_question,
-                k=5,
-                product_types=valid_product_types,
-            )
-        assert "article" in str(exc_info.value).lower()
-
-    def test_article_10_chars_valid(
-        self, valid_question: str, valid_product_types: dict
-    ):
-        """Article with exactly 10 characters should pass (boundary: at min)."""
+        """Empty article should pass validation (min_length=0)."""
         request = RecommendProductsRequest(
-            article="1234567890",  # exactly 10 chars
+            article="",
             question=valid_question,
             k=5,
             product_types=valid_product_types,
         )
-        assert len(request.article) == 10
+        assert request.article == ""
+        assert len(request.article) == 0
+
+    def test_article_any_length_valid(
+        self, valid_question: str, valid_product_types: dict
+    ):
+        """Article with any length (including short strings) should pass."""
+        request = RecommendProductsRequest(
+            article="short",  # 5 chars
+            question=valid_question,
+            k=5,
+            product_types=valid_product_types,
+        )
+        assert request.article == "short"
+        assert len(request.article) == 5
 
     def test_single_vertical_single_uuid_valid(
         self, valid_article: str, valid_question: str
