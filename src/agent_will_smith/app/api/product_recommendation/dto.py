@@ -18,7 +18,7 @@ class RecommendProductsRequest(BaseModel):
     article: str = Field(
         ...,
         description="Original article text to analyze",
-        min_length=10,
+        min_length=0,
         max_length=50000,
         examples=["This article discusses sustainable living and eco-friendly products..."],
     )
