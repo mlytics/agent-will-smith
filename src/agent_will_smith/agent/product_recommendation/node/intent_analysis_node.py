@@ -1,6 +1,7 @@
 """Intent analysis node for LangGraph workflow."""
 
 import structlog
+import mlflow
 from langchain.messages import SystemMessage, HumanMessage
 
 from agent_will_smith.agent.product_recommendation.state import AgentState
@@ -20,6 +21,7 @@ class IntentAnalysisNode:
         self.config = config
         self.logger = structlog.get_logger(__name__)
 
+    @mlflow.trace(name="intent_analysis_node")
     def __call__(self, state: AgentState) -> dict:
         self.logger.info("intent analysis started")
 
@@ -37,13 +39,9 @@ class IntentAnalysisNode:
         if len(article) > 1000:
             article_excerpt += "..."
 
-        user_message = f"""Article: {article_excerpt}
+        user_message = f"""文章摘要：{article_excerpt}
 
-Question: {question}
-
-Please analyze the intent and key themes of this article and question.
-What is the user looking for? What are the main topics?
-Provide a concise intent summary (2-3 sentences max)."""
+使用者問題：{question}"""
 
         self.logger.info(
             "intent analysis invoking llm",

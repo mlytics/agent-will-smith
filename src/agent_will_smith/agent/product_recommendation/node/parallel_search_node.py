@@ -2,6 +2,7 @@
 
 import asyncio
 import structlog
+import mlflow
 from typing import Optional, Literal
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
@@ -72,7 +73,12 @@ class ParallelSearchNode:
                     error_type=type(result).__name__,
                     exc_info=result,
                 )
-                errors[vertical] = f"{type(result).__name__}: {str(result)}"
+                # Include error details for debugging
+                error_msg = f"{type(result).__name__}: {str(result)}"
+                # If it's an AgentException with details, include them
+                if hasattr(result, 'details') and result.details:
+                    error_msg += f" | Details: {result.details}"
+                errors[vertical] = error_msg
                 vertical_results[vertical] = []
             else:
                 vertical_results[vertical] = result
@@ -81,6 +87,7 @@ class ParallelSearchNode:
 
         return vertical_results, errors, status
 
+    @mlflow.trace(name="parallel_search_node")
     async def __call__(self, state: AgentState) -> dict:
         """Execute parallel vector searches for all requested verticals.
         
@@ -90,16 +97,16 @@ class ParallelSearchNode:
         if state.intent_node is None:
             raise ValueError("intent_node must be set before search_node")
 
-        verticals = state.input.verticals
-        k = state.input.k
-        customer_uuid = state.input.customer_uuid
-        article = state.input.article
-        question = state.input.question
+        agent_input = state.input
+        verticals = agent_input.verticals
+        k = agent_input.k
+        article = agent_input.article
+        question = agent_input.question
         intent = state.intent_node.intent
 
         self.logger.info(
             "parallel search started",
-            verticals=verticals,
+            verticals=agent_input.verticals,
             k=k,
             has_intent=bool(intent),
         )
@@ -117,7 +124,7 @@ class ParallelSearchNode:
                 vertical=v,
                 query=query,
                 k=k,
-                customer_uuid=customer_uuid,
+                customer_uuids=agent_input.get_customer_uuids(v),
             )
             for v in verticals
         ]
@@ -146,16 +153,17 @@ class ParallelSearchNode:
             )
         }
 
+    @mlflow.trace(name="search_vertical")
     async def _search_vertical(
         self,
         vertical: Vertical,
         query: str,
         k: int,
-        customer_uuid: Optional[str] = None,
+        customer_uuids: list[str],
         timeout: Optional[float] = None,
     ) -> list[ProductResult]:
         """Search a single vertical with timeout.
-        
+
         Now uses the generic repository.search() method.
         No more method mapping dictionary needed!
         """
@@ -171,7 +179,7 @@ class ParallelSearchNode:
                 vertical=vertical,
                 query=query,
                 max_results=k,
-                customer_uuid=customer_uuid,
+                customer_uuids=customer_uuids,
             ),
             timeout=timeout,
         )

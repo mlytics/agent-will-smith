@@ -11,7 +11,6 @@ from agent_will_smith.agent.product_recommendation.model.types import Vertical
 
 class ActivityMetadata(BaseModel):
     """Activity-specific metadata fields (explicit, type-safe)."""
-    
     category: str | None = Field(None, description="Activity category", examples=["environment", "education"])
     organizer: str | None = Field(None, description="Event organizer name", examples=["EcoLife Foundation"])
     location_name: str | None = Field(None, description="Venue or location name", examples=["Green Community Center"])
@@ -24,7 +23,6 @@ class ActivityMetadata(BaseModel):
 
 class BookMetadata(BaseModel):
     """Book-specific metadata fields (explicit, type-safe)."""
-    
     title_subtitle: str | None = Field(None, description="Book subtitle", examples=["A Guide to Eco-Friendly Living"])
     authors: list[str] = Field(default_factory=list, description="List of author names", examples=[["Jane Smith", "John Doe"]])
     categories: list[str] = Field(default_factory=list, description="Book categories/genres", examples=[["Environment", "Lifestyle"]])
@@ -35,7 +33,6 @@ class BookMetadata(BaseModel):
 
 class ArticleMetadata(BaseModel):
     """Article-specific metadata fields (explicit, type-safe)."""
-    
     authors: list[str] = Field(default_factory=list, description="List of article authors", examples=[["Sarah Green"]])
     keywords: list[str] = Field(default_factory=list, description="Article keywords/tags", examples=[["sustainability", "eco-friendly"]])
     categories: list[str] = Field(default_factory=list, description="Article categories", examples=[["Environment", "Lifestyle"]])
@@ -55,44 +52,14 @@ ProductMetadata = ActivityMetadata | BookMetadata | ArticleMetadata
 
 class ProductResult(BaseModel):
     """Domain model for product search results.
-    
+
     Created by repository layer to provide unified interface
     across different product types (activities, books, articles).
     Metadata is typed per vertical for type safety and explicitness.
     """
-    product_id: str = Field(
-        ...,
-        description="Unique identifier for the product",
-        min_length=1,
-        max_length=100,
-        examples=["act-123", "book-456", "article-789"],
-    )
-    vertical: Vertical = Field(
-        ...,
-        description="Product vertical (activities, books, or articles)",
-        examples=["activities"],
-    )
-    title: str = Field(
-        ...,
-        description="Product title",
-        min_length=1,
-        max_length=500,
-        examples=["Sustainable Living Workshop"],
-    )
-    description: str | None = Field(
-        None,
-        description="Product description or summary",
-        max_length=5000,
-        examples=["Learn practical skills for sustainable living in this hands-on workshop..."],
-    )
-    relevance_score: float = Field(
-        ...,
-        description="Vector search relevance score (0.0=least relevant, 1.0=most relevant)",
-        ge=0.0,
-        le=1.0,
-        examples=[0.87],
-    )
-    metadata: ProductMetadata = Field(
-        ...,
-        description="Product-specific metadata (typed per vertical)",
-    )
+    product_id: str = Field(..., description="Unique identifier for the product", examples=["act-123", "book-456", "article-789"])
+    vertical: Vertical = Field(..., description="Product vertical (activities, books, or articles)", examples=["activities"])
+    title: str = Field(..., description="Product title", examples=["Sustainable Living Workshop"])
+    description: str | None = Field(None, description="Product description or summary", examples=["Learn practical skills for sustainable living in this hands-on workshop..."])
+    relevance_score: float = Field(..., description="Vector search relevance score (0.0-1.0)", ge=0.0, le=1.0, examples=[0.87])
+    metadata: ProductMetadata = Field(..., description="Product-specific metadata (typed per vertical)")

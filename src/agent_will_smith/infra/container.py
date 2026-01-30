@@ -7,6 +7,7 @@ Product-specific logic lives in agent repository layers.
 from dependency_injector import containers, providers
 
 from agent_will_smith.core.container import Container as CoreContainer
+from agent_will_smith.infra.embedding_client import EmbeddingClient
 from agent_will_smith.infra.llm_client import LLMClient
 from agent_will_smith.infra.vector_search_client import VectorSearchClient
 from agent_will_smith.infra.prompt_client import PromptClient
@@ -26,13 +27,21 @@ class Container(containers.DeclarativeContainer):
     # Reference core configs
     core_container = providers.Container(CoreContainer)
 
-    # Factory for VectorSearchClient - agents provide endpoint_name
+    # Factory for EmbeddingClient
+    embedding_client = providers.Factory(
+        EmbeddingClient,
+        api_key=core_container.gemini_config.provided.api_key,
+        model_name=core_container.gemini_config.provided.embedding_model,
+        dimension=core_container.gemini_config.provided.embedding_dimension,
+    )
+
+    # Factory for VectorSearchClient - agents provide endpoint_name and embedding_client
     vector_search_client = providers.Factory(
         VectorSearchClient,
         workspace_url=core_container.databricks_config.provided.host,
         client_id=core_container.databricks_config.provided.client_id,
         client_secret=core_container.databricks_config.provided.client_secret,
-        # endpoint_name provided by agent container
+        # endpoint_name and embedding_client provided by agent container
     )
 
     # Factory for LLMClient - agents provide endpoint and params

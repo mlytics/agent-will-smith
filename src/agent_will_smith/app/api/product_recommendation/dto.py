@@ -6,7 +6,7 @@ All API boundaries use Pydantic models for validation and documentation.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from agent_will_smith.agent.product_recommendation.model.types import Vertical
 from agent_will_smith.agent.product_recommendation.model.product import ProductMetadata
@@ -18,7 +18,7 @@ class RecommendProductsRequest(BaseModel):
     article: str = Field(
         ...,
         description="Original article text to analyze",
-        min_length=10,
+        min_length=0,
         max_length=50000,
         examples=["This article discusses sustainable living and eco-friendly products..."],
     )
@@ -36,17 +36,27 @@ class RecommendProductsRequest(BaseModel):
         le=10,
         examples=[5],
     )
-    product_types: list[Vertical] = Field(
+    product_types: dict[Vertical, list[str]] = Field(
         ...,
-        description="Product types to search (e.g., ['activities'], ['books'], or multiple)",
-        examples=[["activities"], ["activities", "books"]],
-        min_length=1,
+        description="Product types to search with customer UUIDs per vertical",
+        examples=[{
+            "articles": ["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
+            "books": ["738c9f0b-d795-4520-979a-2b6dddc1c5a4"],
+            "activities": ["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
+        }],
     )
-    customer_uuid: str = Field(
-        ...,
-        description="Customer UUID for multi-tenant data isolation",
-        examples=["0b8ecbe2-6097-4ca8-b61b-dfeb1578b011"],
-    )
+
+    @model_validator(mode="after")
+    def validate_product_types(self) -> "RecommendProductsRequest":
+        """Validate each vertical has at least one customer UUID."""
+        if not self.product_types:
+            raise ValueError("product_types must contain at least one vertical")
+        for vertical, uuids in self.product_types.items():
+            if not uuids:
+                raise ValueError(
+                    f"product_types[{vertical.value}] must contain at least one customer UUID"
+                )
+        return self
 
 
 class ProductRecommendation(BaseModel):
@@ -58,9 +68,7 @@ class ProductRecommendation(BaseModel):
     )
     title: str = Field(..., description="Product title")
     description: str | None = Field(None, description="Product description")
-    relevance_score: float = Field(
-        ..., description="Relevance score (0.0-1.0)", ge=0.0, le=1.0
-    )
+    relevance_score: float = Field(..., description="Relevance score (0.0-1.0)", ge=0.0, le=1.0)
     metadata: ProductMetadata = Field(
         ..., description="Product-specific metadata (typed per vertical)"
     )

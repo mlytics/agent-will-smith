@@ -4,10 +4,16 @@ Injectable client class for vector similarity search with dependency injection s
 Provides low-level access to Databricks Vector Search without product-specific assumptions.
 """
 
+from typing import TYPE_CHECKING
+
 from databricks.vector_search.client import VectorSearchClient as DatabricksVectorSearchClient
 import structlog
+import mlflow
 
 from agent_will_smith.core.exceptions import UpstreamError
+
+if TYPE_CHECKING:
+    from agent_will_smith.infra.embedding_client import EmbeddingClient
 
 
 class VectorSearchClient:
@@ -25,6 +31,7 @@ class VectorSearchClient:
         client_id: str,
         client_secret: str,
         endpoint_name: str,
+        embedding_client: "EmbeddingClient",
     ):
         """Initialize vector search client with configuration.
 
@@ -33,8 +40,10 @@ class VectorSearchClient:
             client_id: Service principal client ID
             client_secret: Service principal client secret
             endpoint_name: Vector search endpoint name
+            embedding_client: Client for generating text embeddings
         """
         self.endpoint_name = endpoint_name
+        self._embedding_client = embedding_client
         self.logger = structlog.get_logger(__name__)
         self._client = DatabricksVectorSearchClient(
             workspace_url=workspace_url,
@@ -44,17 +53,19 @@ class VectorSearchClient:
         )
         self.logger.info("vector search client initialized", endpoint=endpoint_name)
 
+    @mlflow.trace(name="databricks_vector_search_api")
     def similarity_search(
         self,
         index_name: str,
         query_text: str,
         columns: list[str],
         num_results: int,
-        filters: dict[str, str] | None = None,
+        filters: dict | str | None = None,
     ) -> dict:
         """Execute similarity search and return raw results.
 
         This is a generic method that performs low-level vector search.
+        Query text is embedded using Gemini before searching.
         All product-specific logic (column selection, result parsing) is handled
         by the caller (typically a repository layer).
 
@@ -63,14 +74,14 @@ class VectorSearchClient:
             query_text: Query text for similarity search
             columns: List of column names to retrieve
             num_results: Maximum number of results
-            filters: Optional filters (e.g., {"customer_uuid": "..."})
+            filters: Optional filters - dict for equality or string for SQL-like expressions
 
         Returns:
             Raw dict response from Databricks Vector Search API
             Format: {"result": {"data_array": [...], "manifest": {...}}}
 
         Raises:
-            UpstreamError: If vector search fails
+            UpstreamError: If embedding or vector search fails
         """
         self.logger.info(
             "vector search starting",
@@ -82,6 +93,9 @@ class VectorSearchClient:
         )
 
         try:
+            # Embed query text using embedding client
+            query_vector = self._embedding_client.embed_text(query_text)
+
             # Get vector search index
             index = self._client.get_index(
                 endpoint_name=self.endpoint_name,
@@ -89,22 +103,34 @@ class VectorSearchClient:
             )
 
             results = index.similarity_search(
-                    query_text=query_text,
-                    columns=columns,
-                    filters=filters,
-                    num_results=num_results,
-                )
+                query_text=query_text,
+                query_vector=query_vector,
+                columns=columns,
+                filters=filters,
+                num_results=num_results,
+                query_type="HYBRID",
+            )
 
             self.logger.info("vector search completed", index_name=index_name)
             return results
 
+        except UpstreamError:
+            raise
         except Exception as e:
+            self.logger.error(
+                "vector search failed",
+                index_name=index_name,
+                error_type=type(e).__name__,
+                error=str(e),
+                exc_info=e,
+            )
             raise UpstreamError(
-                "Vector search failed",
+                f"Vector search failed: {type(e).__name__}: {str(e)}",
                 details={
                     "provider": "databricks_vector_search",
                     "operation": "similarity_search",
                     "index_name": index_name,
+                    "error_type": type(e).__name__,
                     "error": str(e),
                 }
             ) from e

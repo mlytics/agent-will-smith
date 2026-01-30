@@ -4,6 +4,7 @@ Injectable registry for product type configuration.
 All configuration is built at runtime inside the class, not at import time.
 """
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from agent_will_smith.agent.product_recommendation.repo.dto import ActivityDTO, BookDTO, ArticleDTO
@@ -71,8 +72,34 @@ class ProductRegistry:
 
     def get_columns(self, vertical: Vertical) -> list[str]:
         """Get columns to fetch for a vertical.
-        
-        Derived from DTO: all model fields (metadata + id + title + description + score).
+
+        Delegates to DTO which knows which fields are DB columns vs computed fields.
         """
         dto_class = self._products[vertical]
-        return list(dto_class.model_fields.keys())
+        return dto_class.get_db_columns()
+
+    def get_availability_filter(self, vertical: Vertical) -> dict | None:
+        """Return availability filter for a vertical (query-time).
+
+        Business logic for per-vertical availability constraints.
+        Databricks standard endpoints support comparison operators in dict keys:
+        {"column >": value}, {"column <": value}, etc.
+
+        Business rules:
+        - Articles/Books: is_active = true
+        - Activities: end_time > now
+
+        Args:
+            vertical: Product vertical to get filter for.
+
+        Returns:
+            Filter dict or None if no filter needed.
+        """
+        if vertical in (Vertical.ARTICLES, Vertical.BOOKS):
+            return {"is_active": True}
+
+        if vertical == Vertical.ACTIVITIES:
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return {"end_time >": now}
+
+        return None
